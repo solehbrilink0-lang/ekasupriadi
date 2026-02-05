@@ -38,21 +38,50 @@ export const analyzeStoreUrl = async (
   userNotes: string
 ): Promise<AnalysisResult> => {
   try {
-    const prompt = `
-      Tugas: Lakukan "Site Audit" dan analisa kompetitor terhadap URL Toko berikut: ${url}
-      Platform: ${marketplace}
-      Keluhan/Catatan Pengguna: "${userNotes}"
-
-      Instruksi:
-      1. Gunakan Google Search untuk mencari halaman tersebut, review pelanggan, diskusi di forum, atau reputasi brand ini di internet.
-      2. Analisa seolah-olah Anda adalah customer yang kritis dan konsultan bisnis expert.
-      3. Berikan laporan yang mencakup:
-         - **Kesan Pertama & Branding**: Bagaimana tampilan toko di mata customer?
-         - **Analisa Harga & Produk**: (Jika data tersedia di hasil pencarian) Apakah harga bersaing?
-         - **Reputasi**: Apa kata orang tentang toko ini?
-         - **Saran Perbaikan**: Poin-poin konkret untuk meningkatkan penjualan berdasarkan data yang ditemukan dan best practice ${marketplace}.
+    // 1. Clean URL to prevent token bloat and confusion (remove huge query params)
+    let cleanUrl = url;
+    let shopNameHint = "";
+    try {
+      const urlObj = new URL(url);
+      cleanUrl = `${urlObj.origin}${urlObj.pathname}`;
       
-      Jika URL spesifik tidak dapat diakses secara detail, berikan saran strategis umum namun tajam berdasarkan nama toko (jika ada di URL) atau kategori produk yang tersirat.
+      // Try to extract shop name from path parts for better search fallback
+      const pathParts = urlObj.pathname.split('/').filter(p => p.length > 0);
+      if (pathParts.length > 0) {
+        // Usually shop name is the first part in path for shopee/tokopedia/tiktok
+        // e.g. shopee.co.id/my_shop_name
+        if (!pathParts[0].includes('product') && !pathParts[0].includes('search')) {
+            shopNameHint = pathParts[0].replace(/[-_]/g, ' ');
+        }
+      }
+    } catch (e) {
+      // If invalid URL string, use original but warn internally
+      console.warn("Invalid URL parsing", e);
+    }
+
+    const prompt = `
+      ROLE: E-commerce Auditor & Strategist (${marketplace}).
+      
+      INPUT:
+      - Target URL: ${cleanUrl}
+      - Shop Name Hint: ${shopNameHint || "Unknown"}
+      - User Notes: "${userNotes}"
+
+      TASK:
+      Perform a "Site Audit" using Google Search.
+      1. Search for the URL directly.
+      2. IF the specific URL is not accessible or returns no info, SEARCH for the Shop Name/Brand "${shopNameHint}" on ${marketplace} via Google.
+      3. Analyze the available public data (reviews, pricing strategy, brand reputation).
+
+      OUTPUT REPORT FORMAT (Markdown):
+      - **Status Toko**: (Apakah toko/produk ditemukan di hasil pencarian?)
+      - **Kesan Branding**: (Visual, Trustworthiness, Profesionalitas berdasarkan data search)
+      - **Analisa Kompetitif**: (Harga vs Pasar, Ulasan Customer)
+      - **Action Plan**: (3-5 saran konkrit untuk user agar penjualan naik)
+
+      IMPORTANT:
+      - If you cannot find specific data, give "General Best Practices" for the category inferred from the URL or Notes.
+      - Do NOT simply say "I cannot browse". Use the search tool to find *metadata* about the page.
     `;
 
     // Using gemini-3-flash-preview as recommended for Search Grounding
@@ -72,13 +101,24 @@ export const analyzeStoreUrl = async (
       .map((web: any) => ({ title: web.title, uri: web.uri }));
 
     return {
-      text: response.text || "Maaf, analisa tidak dapat dibuat. Pastikan URL benar atau coba lagi nanti.",
+      text: response.text || "Analisa selesai, namun AI tidak memberikan output teks. Coba periksa URL atau catatan Anda.",
       sources: sources
     };
 
-  } catch (error) {
+  } catch (error: any) {
     console.error("Store Analysis Error:", error);
-    throw new Error("Gagal menganalisa URL toko. Pastikan koneksi aman dan URL valid.");
+    // Propagate the ACTUAL error message to the UI for better debugging
+    const errorDetail = error.message || error.toString();
+    
+    if (errorDetail.includes("400")) {
+        throw new Error("URL tidak valid atau format permintaan ditolak oleh server.");
+    } else if (errorDetail.includes("503") || errorDetail.includes("500")) {
+        throw new Error("Layanan AI sedang sibuk. Silakan coba 1 menit lagi.");
+    } else if (errorDetail.includes("fetch")) {
+        throw new Error("Koneksi gagal. Periksa internet atau matikan VPN/AdBlock.");
+    }
+
+    throw new Error(`Gagal: ${errorDetail}`);
   }
 };
 
