@@ -11,7 +11,6 @@ export const analyzeCompetitorOrShop = async (
   context: string, 
   marketplace: string
 ): Promise<string> => {
-  // Keeping backward compatibility or fallback logic if needed, though UI might switch to URL
   try {
     const prompt = `
       Anda adalah konsultan E-commerce expert untuk pasar Indonesia (khususnya ${marketplace}).
@@ -20,12 +19,10 @@ export const analyzeCompetitorOrShop = async (
       Berikan jawaban taktis, actionable, dan profesional.
     `;
 
+    // Using gemini-3-flash-preview for general text tasks
     const response = await ai.models.generateContent({
       model: 'gemini-3-flash-preview',
-      contents: prompt,
-      config: {
-        thinkingConfig: { thinkingBudget: 1024 }
-      }
+      contents: prompt
     });
 
     return response.text || "Maaf, tidak dapat menghasilkan analisa saat ini.";
@@ -58,13 +55,12 @@ export const analyzeStoreUrl = async (
       Jika URL spesifik tidak dapat diakses secara detail, berikan saran strategis umum namun tajam berdasarkan nama toko (jika ada di URL) atau kategori produk yang tersirat.
     `;
 
-    // Using gemini-3-pro-preview because we are using tools (googleSearch) and need complex reasoning
+    // Using gemini-3-flash-preview as recommended for Search Grounding
     const response = await ai.models.generateContent({
-      model: 'gemini-3-pro-preview',
+      model: 'gemini-3-flash-preview',
       contents: prompt,
       config: {
-        tools: [{ googleSearch: {} }],
-        responseMimeType: "text/plain"
+        tools: [{ googleSearch: {} }]
       }
     });
 
@@ -76,13 +72,13 @@ export const analyzeStoreUrl = async (
       .map((web: any) => ({ title: web.title, uri: web.uri }));
 
     return {
-      text: response.text || "Maaf, analisa tidak dapat dibuat. Pastikan URL benar.",
+      text: response.text || "Maaf, analisa tidak dapat dibuat. Pastikan URL benar atau coba lagi nanti.",
       sources: sources
     };
 
   } catch (error) {
     console.error("Store Analysis Error:", error);
-    throw new Error("Gagal menganalisa URL toko. Coba lagi nanti.");
+    throw new Error("Gagal menganalisa URL toko. Pastikan koneksi aman dan URL valid.");
   }
 };
 

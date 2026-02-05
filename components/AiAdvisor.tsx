@@ -1,6 +1,6 @@
 import React, { useState } from 'react';
 import { analyzeStoreUrl, AnalysisResult } from '../services/geminiService';
-import { Bot, Send, Loader2, Lightbulb, Link as LinkIcon, ExternalLink, Search } from 'lucide-react';
+import { Bot, Send, Loader2, Lightbulb, Link as LinkIcon, ExternalLink, Search, AlertCircle } from 'lucide-react';
 import ReactMarkdown from 'react-markdown';
 
 const AiAdvisor: React.FC = () => {
@@ -8,6 +8,7 @@ const AiAdvisor: React.FC = () => {
   const [notes, setNotes] = useState('');
   const [result, setResult] = useState<AnalysisResult | null>(null);
   const [loading, setLoading] = useState(false);
+  const [errorMsg, setErrorMsg] = useState<string | null>(null);
   const [marketplace, setMarketplace] = useState('Shopee');
 
   const handleAnalysis = async () => {
@@ -18,12 +19,13 @@ const AiAdvisor: React.FC = () => {
     
     setLoading(true);
     setResult(null);
+    setErrorMsg(null);
     
     try {
       const data = await analyzeStoreUrl(url, marketplace, notes);
       setResult(data);
-    } catch (error) {
-      alert("Terjadi kesalahan saat menganalisa URL.");
+    } catch (error: any) {
+      setErrorMsg(error.message || "Terjadi kesalahan saat menganalisa URL.");
     } finally {
       setLoading(false);
     }
@@ -49,7 +51,7 @@ const AiAdvisor: React.FC = () => {
       </div>
 
       <div className="flex-1 p-6 overflow-y-auto bg-gray-50">
-        {!result && !loading && (
+        {!result && !loading && !errorMsg && (
           <div className="flex flex-col items-center justify-center h-full text-center text-gray-500 space-y-4">
             <Search className="w-12 h-12 text-violet-400 opacity-50" />
             <div className="max-w-md">
@@ -66,6 +68,15 @@ const AiAdvisor: React.FC = () => {
             <Loader2 className="w-10 h-10 animate-spin mb-3" />
             <p className="font-medium">Sedang mengunjungi URL & Menganalisa...</p>
             <p className="text-xs text-gray-400 mt-2">Ini menggunakan Google Search Real-time</p>
+          </div>
+        )}
+
+        {errorMsg && (
+          <div className="flex flex-col items-center justify-center h-full text-center p-4">
+             <AlertCircle className="w-10 h-10 text-red-500 mb-3" />
+             <p className="text-gray-800 font-medium mb-1">Gagal Menganalisa</p>
+             <p className="text-sm text-gray-500">{errorMsg}</p>
+             <button onClick={() => setErrorMsg(null)} className="mt-4 text-sm text-indigo-600 hover:underline">Coba Lagi</button>
           </div>
         )}
 
