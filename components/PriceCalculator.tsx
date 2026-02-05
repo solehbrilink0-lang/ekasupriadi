@@ -1,8 +1,7 @@
-
-import React, { useState, useEffect } from 'react';
+import React, { useState } from 'react';
 import { Marketplace, PricingResult } from '../types';
-import { PieChart, Pie, Cell, ResponsiveContainer } from 'recharts';
-import { ChevronDown, Info, DollarSign, Store, Percent } from 'lucide-react';
+import { PieChart, Pie, Cell, ResponsiveContainer, Tooltip, Legend } from 'recharts';
+import { DollarSign, Store, Percent, AlertCircle } from 'lucide-react';
 
 const MARKETPLACE_FEES = {
   [Marketplace.SHOPEE]: { admin: 6.5, transaction: 4.0, shipping: 4.0 },
@@ -28,7 +27,11 @@ const PriceCalculator: React.FC = () => {
     const totalFeePct = (fees.admin + fees.transaction + fees.shipping) / 100;
     if (totalFeePct >= 0.9) return;
 
+    // Formula: Price = (Modal + Profit) / (1 - Fee%)
     const requiredRealPrice = (modal + profitTarget) / (1 - totalFeePct);
+    
+    // If user wants to display a discount, we bump up the price
+    // DisplayPrice * (1 - disc%) = RealPrice
     const displayPrice = disc > 0 ? requiredRealPrice / (1 - (disc/100)) : requiredRealPrice;
 
     setResult({
@@ -46,98 +49,141 @@ const PriceCalculator: React.FC = () => {
   };
 
   const chartData = result ? [
-    { name: 'Modal', value: parseFloat(cogs), color: '#6366f1' },
-    { name: 'Profit', value: result.netProfit, color: '#10b981' },
-    { name: 'Biaya', value: result.totalFees, color: '#f43f5e' },
+    { name: 'Modal Produk', value: parseFloat(cogs), color: '#6366f1' }, // Indigo
+    { name: 'Profit Bersih', value: result.netProfit, color: '#10b981' }, // Emerald
+    { name: 'Biaya Admin', value: result.totalFees, color: '#f43f5e' }, // Rose
   ] : [];
 
   return (
-    <div className="space-y-6">
-      {/* Result Card */}
-      {result && (
-        <div className="bg-white rounded-[2rem] shadow-xl shadow-indigo-100 border border-indigo-50 overflow-hidden">
-          <div className="bg-gradient-to-r from-indigo-600 to-violet-600 p-8 text-white text-center">
-            <p className="text-indigo-100 text-xs font-bold uppercase tracking-widest mb-2">Harga Jual Disarankan</p>
-            <h2 className="text-4xl font-extrabold mb-1">
-              Rp {Math.ceil(result.sellingPrice).toLocaleString('id-ID')}
-            </h2>
-            {parseFloat(discountPercent) > 0 && (
-              <span className="inline-block bg-white/20 backdrop-blur-md px-3 py-1 rounded-full text-[10px] font-bold">
-                SUDAH TERMASUK DISKON {discountPercent}%
-              </span>
-            )}
-          </div>
-          <div className="p-6 grid grid-cols-2 gap-4 border-b border-slate-50">
-            <div className="text-center p-4 bg-emerald-50 rounded-2xl">
-              <span className="block text-[10px] text-emerald-600 font-bold uppercase">Profit Bersih</span>
-              <span className="text-lg font-bold text-emerald-700">Rp {Math.floor(result.netProfit).toLocaleString('id-ID')}</span>
-            </div>
-            <div className="text-center p-4 bg-rose-50 rounded-2xl">
-              <span className="block text-[10px] text-rose-500 font-bold uppercase">Total Biaya</span>
-              <span className="text-lg font-bold text-rose-600">Rp {Math.ceil(result.totalFees).toLocaleString('id-ID')}</span>
-            </div>
-          </div>
-          <div className="h-40 p-4">
-             <ResponsiveContainer width="100%" height="100%">
-                <PieChart>
-                  <Pie data={chartData} innerRadius={40} outerRadius={60} paddingAngle={5} dataKey="value">
-                    {chartData.map((e, i) => <Cell key={i} fill={e.color} />)}
-                  </Pie>
-                </PieChart>
-             </ResponsiveContainer>
-          </div>
-        </div>
-      )}
-
-      {/* Input Form */}
-      <div className="bg-white p-6 rounded-[2rem] shadow-sm border border-slate-100 space-y-5">
-        <div className="space-y-1">
-          <label className="text-[10px] font-bold text-slate-400 uppercase tracking-widest ml-1">Marketplace</label>
-          <div className="relative">
-            <Store className="absolute left-4 top-1/2 -translate-y-1/2 w-4 h-4 text-indigo-500" />
-            <select 
-              value={marketplace} 
-              onChange={(e) => setMarketplace(e.target.value as Marketplace)}
-              className="w-full bg-slate-50 border border-slate-100 rounded-2xl pl-10 pr-4 py-3.5 text-sm font-semibold text-slate-700 outline-none focus:ring-2 focus:ring-indigo-500 appearance-none transition-all"
-            >
-              {Object.values(Marketplace).map(m => <option key={m} value={m}>{m}</option>)}
-            </select>
-            <ChevronDown className="absolute right-4 top-1/2 -translate-y-1/2 w-4 h-4 text-slate-300" />
-          </div>
+    <div className="grid grid-cols-1 md:grid-cols-2 gap-8">
+      {/* Input Section */}
+      <div className="space-y-6">
+        <div className="space-y-2">
+          <label className="text-sm font-semibold text-gray-700 flex items-center gap-2">
+            <Store className="w-4 h-4" /> Pilih Marketplace
+          </label>
+          <select 
+            value={marketplace} 
+            onChange={(e) => setMarketplace(e.target.value as Marketplace)}
+            className="w-full p-2.5 bg-gray-50 border border-gray-300 rounded-lg focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500 transition-all"
+          >
+            {Object.values(Marketplace).map(m => <option key={m} value={m}>{m}</option>)}
+          </select>
         </div>
 
-        <div className="grid grid-cols-2 gap-4">
-          <div className="space-y-1">
-            <label className="text-[10px] font-bold text-slate-400 uppercase tracking-widest ml-1">Modal Produk</label>
+        <div className="grid grid-cols-1 gap-4">
+          <div className="space-y-2">
+            <label className="text-sm font-semibold text-gray-700">Modal Produk (HPP)</label>
             <div className="relative">
-              <span className="absolute left-4 top-1/2 -translate-y-1/2 text-[10px] font-bold text-slate-400">Rp</span>
-              <input type="number" value={cogs} onChange={(e) => setCogs(e.target.value)} placeholder="0" className="w-full bg-slate-50 border border-slate-100 rounded-2xl pl-10 pr-4 py-3.5 text-sm font-bold text-slate-700 outline-none focus:ring-2 focus:ring-indigo-500" />
+              <span className="absolute left-3 top-2.5 text-gray-500 font-bold">Rp</span>
+              <input 
+                type="number" 
+                value={cogs} 
+                onChange={(e) => setCogs(e.target.value)} 
+                placeholder="0" 
+                className="w-full pl-10 p-2.5 bg-gray-50 border border-gray-300 rounded-lg focus:ring-2 focus:ring-indigo-500" 
+              />
             </div>
           </div>
-          <div className="space-y-1">
-            <label className="text-[10px] font-bold text-slate-400 uppercase tracking-widest ml-1">Cuan Bersih</label>
+          <div className="space-y-2">
+            <label className="text-sm font-semibold text-gray-700">Target Profit Bersih</label>
             <div className="relative">
-              <span className="absolute left-4 top-1/2 -translate-y-1/2 text-[10px] font-bold text-slate-400">Rp</span>
-              <input type="number" value={desiredProfit} onChange={(e) => setDesiredProfit(e.target.value)} placeholder="0" className="w-full bg-slate-50 border border-slate-100 rounded-2xl pl-10 pr-4 py-3.5 text-sm font-bold text-slate-700 outline-none focus:ring-2 focus:ring-indigo-500" />
+              <span className="absolute left-3 top-2.5 text-gray-500 font-bold">Rp</span>
+              <input 
+                type="number" 
+                value={desiredProfit} 
+                onChange={(e) => setDesiredProfit(e.target.value)} 
+                placeholder="0" 
+                className="w-full pl-10 p-2.5 bg-gray-50 border border-gray-300 rounded-lg focus:ring-2 focus:ring-indigo-500" 
+              />
             </div>
           </div>
         </div>
 
-        <div className="space-y-1">
-          <label className="text-[10px] font-bold text-slate-400 uppercase tracking-widest ml-1">Tampilan Diskon (%)</label>
-          <div className="relative">
-            <Percent className="absolute left-4 top-1/2 -translate-y-1/2 w-4 h-4 text-slate-300" />
-            <input type="number" value={discountPercent} onChange={(e) => setDiscountPercent(e.target.value)} placeholder="0" className="w-full bg-slate-50 border border-slate-100 rounded-2xl pl-10 pr-4 py-3.5 text-sm font-bold text-slate-700 outline-none focus:ring-2 focus:ring-indigo-500" />
+        <div className="space-y-2">
+          <label className="text-sm font-semibold text-gray-700 flex items-center gap-2">
+            <Percent className="w-4 h-4" /> Rencana Diskon (Opsional)
+          </label>
+          <div className="flex items-center gap-2">
+            <input 
+              type="number" 
+              value={discountPercent} 
+              onChange={(e) => setDiscountPercent(e.target.value)} 
+              placeholder="0" 
+              className="w-24 p-2.5 bg-gray-50 border border-gray-300 rounded-lg focus:ring-2 focus:ring-indigo-500" 
+            />
+            <span className="text-sm text-gray-500">% (Akan ditampilkan coret)</span>
           </div>
         </div>
 
         <button 
           onClick={handleCalculate}
-          className="w-full bg-slate-900 text-white py-4 rounded-2xl font-bold shadow-lg shadow-slate-200 active:scale-95 transition-all flex items-center justify-center gap-2 mt-4"
+          className="w-full bg-indigo-600 hover:bg-indigo-700 text-white py-3 rounded-lg font-bold shadow-md active:transform active:scale-95 transition-all flex items-center justify-center gap-2"
         >
-          <DollarSign className="w-5 h-5 text-yellow-400" />
-          HITUNG CUAN
+          <DollarSign className="w-5 h-5" />
+          Hitung Harga Jual
         </button>
+      </div>
+
+      {/* Result Section */}
+      <div className="bg-gray-50 rounded-xl p-6 border border-gray-200 flex flex-col justify-center">
+        {result ? (
+          <div className="space-y-6">
+            <div className="text-center pb-6 border-b border-gray-200">
+              <p className="text-sm font-semibold text-gray-500 uppercase tracking-wide">Harga Jual Disarankan</p>
+              <h2 className="text-4xl font-extrabold text-indigo-700 my-2">
+                Rp {Math.ceil(result.sellingPrice).toLocaleString('id-ID')}
+              </h2>
+              {parseFloat(discountPercent) > 0 && (
+                <div className="inline-flex items-center gap-1 bg-red-100 text-red-600 px-2 py-0.5 rounded text-xs font-bold">
+                  Diskon {discountPercent}% diterapkan
+                </div>
+              )}
+            </div>
+
+            <div className="grid grid-cols-2 gap-4">
+              <div className="bg-white p-3 rounded-lg border border-gray-200 shadow-sm text-center">
+                <span className="block text-xs text-gray-500 mb-1">Profit Bersih</span>
+                <span className="block text-lg font-bold text-green-600">
+                  Rp {Math.floor(result.netProfit).toLocaleString('id-ID')}
+                </span>
+              </div>
+              <div className="bg-white p-3 rounded-lg border border-gray-200 shadow-sm text-center">
+                <span className="block text-xs text-gray-500 mb-1">Total Biaya Admin</span>
+                <span className="block text-lg font-bold text-red-500">
+                  Rp {Math.ceil(result.totalFees).toLocaleString('id-ID')}
+                </span>
+              </div>
+            </div>
+
+            <div className="h-48 w-full">
+              <ResponsiveContainer width="100%" height="100%">
+                <PieChart>
+                  <Pie 
+                    data={chartData} 
+                    cx="50%" 
+                    cy="50%" 
+                    innerRadius={40} 
+                    outerRadius={60} 
+                    paddingAngle={5} 
+                    dataKey="value"
+                  >
+                    {chartData.map((entry, index) => (
+                      <Cell key={`cell-${index}`} fill={entry.color} />
+                    ))}
+                  </Pie>
+                  <Tooltip formatter={(value: number) => `Rp ${value.toLocaleString('id-ID')}`} />
+                  <Legend verticalAlign="bottom" height={36} iconType="circle" />
+                </PieChart>
+              </ResponsiveContainer>
+            </div>
+          </div>
+        ) : (
+          <div className="flex flex-col items-center justify-center h-full text-gray-400 space-y-3">
+            <AlertCircle className="w-12 h-12 opacity-30" />
+            <p className="text-center text-sm">Masukkan modal dan target profit untuk melihat simulasi harga.</p>
+          </div>
+        )}
       </div>
     </div>
   );
