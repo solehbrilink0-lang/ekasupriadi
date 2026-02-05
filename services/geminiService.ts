@@ -7,6 +7,86 @@ export interface AnalysisResult {
   sources: Array<{ title: string; uri: string }>;
 }
 
+export interface ShopData {
+  shopName: string;
+  productType: string;
+  dailyCapacity: string; // Changed from productCount
+  stockCapacity: string;
+  profitMargin: string;
+  marketplace: string;
+  shopStatus: 'NEW' | 'ESTABLISHED'; // New field
+}
+
+export interface DailyInsightResult {
+  headline: string;
+  strategy: string;
+  marketMood: 'FIRE' | 'SLOW' | 'NORMAL';
+  trendingCategories: string[];
+  actionItem: string;
+}
+
+// --- NEW FUNCTION: Daily Dashboard Insight ---
+export const getDailyInsight = async (): Promise<DailyInsightResult> => {
+  try {
+    const today = new Date();
+    const dateString = today.toLocaleDateString('id-ID', { weekday: 'long', day: 'numeric', month: 'long', year: 'numeric' });
+    
+    const prompt = `
+      Hari ini adalah: ${dateString}.
+      
+      Peran: Anda adalah AI Business Intelligence untuk E-commerce Indonesia (Shopee, TikTok, Tokopedia).
+      Tugas: Analisa tanggal hari ini dan berikan insight singkat untuk seller.
+      
+      Konteks Analisa:
+      1. Apakah ini Tanggal Kembar (misal 9.9, 12.12)? -> Mood: FIRE
+      2. Apakah ini Periode Gajian (Payday, tgl 25 - 5)? -> Mood: FIRE
+      3. Apakah ini Akhir Pekan (Sabtu/Minggu)? -> Mood: SLOW (biasanya orang liburan/kurang buka HP untuk belanja barang serius, tapi bagus untuk barang hobi)
+      4. Apakah ini Tanggal Tua (tgl 15-24)? -> Mood: SLOW/NORMAL
+      
+      Output JSON:
+      - headline: Satu kalimat penyemangat singkat relevan dengan tanggal.
+      - strategy: 2-3 kalimat saran strategis apa yang harus dilakukan seller HARI INI.
+      - marketMood: Pilih antara 'FIRE' (Sangat Ramai), 'NORMAL', atau 'SLOW' (Sepi).
+      - trendingCategories: List 3 kategori produk yang potensial laku di tanggal/hari ini.
+      - actionItem: Satu tugas konkret 1 kalimat.
+    `;
+
+    const response = await ai.models.generateContent({
+      model: 'gemini-3-flash-preview',
+      contents: prompt,
+      config: {
+        responseMimeType: "application/json",
+        responseSchema: {
+          type: Type.OBJECT,
+          properties: {
+            headline: { type: Type.STRING },
+            strategy: { type: Type.STRING },
+            marketMood: { type: Type.STRING, enum: ["FIRE", "SLOW", "NORMAL"] },
+            trendingCategories: { 
+              type: Type.ARRAY, 
+              items: { type: Type.STRING } 
+            },
+            actionItem: { type: Type.STRING }
+          },
+          required: ["headline", "strategy", "marketMood", "trendingCategories", "actionItem"]
+        }
+      }
+    });
+
+    return JSON.parse(response.text || "{}");
+  } catch (error) {
+    console.error("Daily Insight Error:", error);
+    // Fallback data if AI fails
+    return {
+      headline: "Tetap Semangat Berjualan!",
+      strategy: "Cek stok dan pastikan chat terbalas dengan cepat. Konsistensi adalah kunci.",
+      marketMood: "NORMAL",
+      trendingCategories: ["Fashion", "Kebutuhan Rumah", "Makanan"],
+      actionItem: "Upload 1 produk baru atau update foto produk lama."
+    };
+  }
+};
+
 export const analyzeCompetitorOrShop = async (
   context: string, 
   marketplace: string
@@ -19,7 +99,6 @@ export const analyzeCompetitorOrShop = async (
       Berikan jawaban taktis, actionable, dan profesional.
     `;
 
-    // Using gemini-3-flash-preview for general text tasks
     const response = await ai.models.generateContent({
       model: 'gemini-3-flash-preview',
       contents: prompt
@@ -32,103 +111,93 @@ export const analyzeCompetitorOrShop = async (
   }
 };
 
-export const analyzeStoreUrl = async (
-  url: string,
-  marketplace: string,
-  userNotes: string
+export const analyzeShopStrategy = async (
+  data: ShopData,
+  imageBase64: string | null,
+  mimeType: string | null
 ): Promise<AnalysisResult> => {
   try {
-    // 1. Clean URL to prevent token bloat and confusion (remove huge query params)
-    let cleanUrl = url;
-    let shopNameHint = "";
-    try {
-      const urlObj = new URL(url);
-      cleanUrl = `${urlObj.origin}${urlObj.pathname}`;
-      
-      // Try to extract shop name from path parts for better search fallback
-      const pathParts = urlObj.pathname.split('/').filter(p => p.length > 0);
-      if (pathParts.length > 0) {
-        // Usually shop name is the first part in path for shopee/tokopedia/tiktok
-        // e.g. shopee.co.id/my_shop_name
-        if (!pathParts[0].includes('product') && !pathParts[0].includes('search')) {
-            shopNameHint = pathParts[0].replace(/[-_]/g, ' ');
-        }
-      }
-    } catch (e) {
-      // If invalid URL string, use original but warn internally
-      console.warn("Invalid URL parsing", e);
-    }
+    const statusText = data.shopStatus === 'NEW' 
+      ? "Toko Baru Buka (Belum ada rating/penjualan signifikan)" 
+      : "Toko Sudah Berjalan (Sudah ada reputasi/rating)";
 
     const prompt = `
-      ROLE: E-commerce Auditor & Strategist (${marketplace}).
+      PERAN: Anda adalah Senior Business Consultant & E-commerce Strategist untuk Marketplace Indonesia.
       
-      INPUT:
-      - Target URL: ${cleanUrl}
-      - Shop Name Hint: ${shopNameHint || "Unknown"}
-      - User Notes: "${userNotes}"
+      DATA KLIEN:
+      - Nama Toko: "${data.shopName}"
+      - Status Toko: ${statusText}
+      - Jenis Produk: "${data.productType}"
+      - Kapasitas Kirim Harian: ${data.dailyCapacity} paket/hari (Operasional)
+      - Total Stok Tersedia: ${data.stockCapacity} pcs
+      - Target Margin Keuntungan: ${data.profitMargin}%
+      - Target Marketplace: ${data.marketplace}
 
-      TASK:
-      Perform a "Site Audit" using Google Search.
-      1. Search for the URL directly.
-      2. IF the specific URL is not accessible or returns no info, SEARCH for the Shop Name/Brand "${shopNameHint}" on ${marketplace} via Google.
-      3. Analyze the available public data (reviews, pricing strategy, brand reputation).
+      TUGAS: Berikan analisa strategis mendalam berdasarkan data di atas (khususnya status toko dan kapasitas operasional) serta gambar produk (jika ada).
+      
+      FORMAT LAPORAN (Markdown):
+      
+      1. **Analisa Branding & Identitas** 🏪
+         - Apakah nama "${data.shopName}" cocok untuk kategori "${data.productType}"?
+         - KHUSUS ${data.shopStatus === 'NEW' ? 'TOKO BARU' : 'TOKO LAMA'}: Berikan strategi branding yang sesuai. 
+           (Jika Baru: Fokus membangun Trust & First Impression. Jika Lama: Fokus pada Retensi & Dominasi).
 
-      OUTPUT REPORT FORMAT (Markdown):
-      - **Status Toko**: (Apakah toko/produk ditemukan di hasil pencarian?)
-      - **Kesan Branding**: (Visual, Trustworthiness, Profesionalitas berdasarkan data search)
-      - **Analisa Kompetitif**: (Harga vs Pasar, Ulasan Customer)
-      - **Action Plan**: (3-5 saran konkrit untuk user agar penjualan naik)
+      2. **Bedah Produk & Visual** 📦
+         - (Analisa Gambar): Review kualitas foto. Apakah cukup menarik untuk scroll-stopper?
+         - Market Fit: Apakah produk ini cocok untuk strategi "Volume Besar Margin Tipis" atau "Premium Margin Tebal"?
 
-      IMPORTANT:
-      - If you cannot find specific data, give "General Best Practices" for the category inferred from the URL or Notes.
-      - Do NOT simply say "I cannot browse". Use the search tool to find *metadata* about the page.
+      3. **Strategi Penjualan di ${data.marketplace}** 🚀
+         - Karena toko ini **${statusText}**, apa fitur ${data.marketplace} yang WAJIB dimaksimalkan minggu ini?
+         - Strategi Operasional: Dengan kapasitas kirim **${data.dailyCapacity} paket/hari**, bagaimana mengatur flow order agar tidak overload atau justru kekurangan order?
+         - Jika kapasitas kirim kecil tapi stok banyak: Sarankan cara mempercepat packing.
+         - Jika kapasitas kirim besar: Sarankan cara scale-up traffic (Iklan/Live).
+
+      4. **Analisa Keuntungan & Penetapan Harga** 💰
+         - Margin ${data.profitMargin}% apakah realistis untuk status toko ini?
+         - (Tips: Toko baru biasanya perlu penetrasi harga, Toko lama bisa main harga normal).
+         - Ingatkan user untuk menggunakan fitur "Kalkulator Harga" di aplikasi ini untuk memastikan tidak rugi kena admin fee.
+
+      5. **Action Plan Minggu Ini** ✅
+         - 3 langkah konkret yang harus dilakukan penjual sekarang juga.
     `;
 
-    // Using gemini-3-flash-preview as recommended for Search Grounding
+    const parts: any[] = [{ text: prompt }];
+    
+    // Add image if provided
+    if (imageBase64 && mimeType) {
+      parts.push({
+        inlineData: {
+          mimeType: mimeType,
+          data: imageBase64
+        }
+      });
+    }
+
     const response = await ai.models.generateContent({
       model: 'gemini-3-flash-preview',
-      contents: prompt,
-      config: {
-        tools: [{ googleSearch: {} }]
+      contents: {
+        parts: parts
       }
     });
 
-    // Extract grounding chunks (sources)
-    const groundingChunks = response.candidates?.[0]?.groundingMetadata?.groundingChunks || [];
-    const sources = groundingChunks
-      .map((chunk: any) => chunk.web)
-      .filter((web: any) => web && web.uri && web.title)
-      .map((web: any) => ({ title: web.title, uri: web.uri }));
-
     return {
-      text: response.text || "Analisa selesai, namun AI tidak memberikan output teks. Coba periksa URL atau catatan Anda.",
-      sources: sources
+      text: response.text || "Analisa selesai, namun tidak ada output teks.",
+      sources: [] 
     };
 
   } catch (error: any) {
-    console.error("Store Analysis Error:", error);
+    console.error("Shop Strategy Analysis Error:", error);
     
-    // Normalize error string for checking
     const errorDetail = error.message || error.toString();
     const errString = errorDetail.toLowerCase();
 
-    // Specific Error Handling
-    if (errString.includes("429") || errString.includes("quota") || errString.includes("resource_exhausted")) {
-        throw new Error("Kuota AI sedang penuh/limit tercapai. Mohon tunggu 1-2 menit sebelum mencoba lagi.");
-    } else if (errString.includes("400")) {
-        throw new Error("URL tidak valid atau format permintaan ditolak oleh server.");
-    } else if (errString.includes("503") || errString.includes("500") || errString.includes("overloaded")) {
-        throw new Error("Layanan AI sedang sibuk. Silakan coba 1 menit lagi.");
-    } else if (errString.includes("fetch") || errString.includes("network") || errString.includes("failed to fetch")) {
-        throw new Error("Koneksi gagal. Periksa internet Anda (VPN/AdBlock mungkin memblokir).");
+    if (errString.includes("429")) {
+        throw new Error("Kuota AI penuh. Mohon tunggu 1 menit.");
+    } else if (errString.includes("503")) {
+        throw new Error("Server AI sedang sibuk.");
     }
 
-    // Fallback: If it's a raw JSON error, simplify it
-    if (errorDetail.includes("{") && errorDetail.includes("}")) {
-        throw new Error("Terjadi gangguan pada sistem AI. Silakan coba lagi nanti.");
-    }
-
-    throw new Error(`Gagal: ${errorDetail.substring(0, 100)}...`);
+    throw new Error(`Gagal menganalisa strategi: ${errorDetail.substring(0, 100)}...`);
   }
 };
 

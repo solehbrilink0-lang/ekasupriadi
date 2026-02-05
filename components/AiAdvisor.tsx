@@ -1,19 +1,51 @@
-import React, { useState } from 'react';
-import { analyzeStoreUrl, AnalysisResult } from '../services/geminiService';
-import { Bot, Send, Loader2, Lightbulb, Link as LinkIcon, ExternalLink, Search, AlertCircle } from 'lucide-react';
+import React, { useState, useRef } from 'react';
+import { analyzeShopStrategy, ShopData, AnalysisResult } from '../services/geminiService';
+import { Bot, Loader2, ImagePlus, Box, Store, Tag, TrendingUp, AlertCircle, RefreshCcw, Truck, Award } from 'lucide-react';
 import ReactMarkdown from 'react-markdown';
 
 const AiAdvisor: React.FC = () => {
-  const [url, setUrl] = useState('');
-  const [notes, setNotes] = useState('');
+  // State Input Form
+  const [shopName, setShopName] = useState('');
+  const [productType, setProductType] = useState('');
+  const [dailyCapacity, setDailyCapacity] = useState(''); // Replaced productCount
+  const [stockCapacity, setStockCapacity] = useState('');
+  const [profitMargin, setProfitMargin] = useState('');
+  const [marketplace, setMarketplace] = useState('Shopee');
+  const [shopStatus, setShopStatus] = useState<'NEW' | 'ESTABLISHED'>('NEW'); // New State
+  
+  // Image State
+  const [selectedImage, setSelectedImage] = useState<string | null>(null);
+  const [base64Data, setBase64Data] = useState<string | null>(null);
+  const [mimeType, setMimeType] = useState<string | null>(null);
+
+  // System State
   const [result, setResult] = useState<AnalysisResult | null>(null);
   const [loading, setLoading] = useState(false);
   const [errorMsg, setErrorMsg] = useState<string | null>(null);
-  const [marketplace, setMarketplace] = useState('Shopee');
+
+  const fileInputRef = useRef<HTMLInputElement>(null);
+
+  const handleImageUpload = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (file) {
+      const reader = new FileReader();
+      reader.onloadend = () => {
+        const resultString = reader.result as string;
+        setSelectedImage(resultString);
+        const matches = resultString.match(/^data:(.+);base64,(.+)$/);
+        if (matches) {
+          setMimeType(matches[1]);
+          setBase64Data(matches[2]);
+        }
+      };
+      reader.readAsDataURL(file);
+    }
+  };
 
   const handleAnalysis = async () => {
-    if (!url.trim()) {
-      alert("Mohon masukkan URL toko Anda.");
+    // Validasi sederhana
+    if (!shopName || !productType) {
+      alert("Mohon isi Nama Toko dan Jenis Produk minimal.");
       return;
     }
     
@@ -21,129 +53,268 @@ const AiAdvisor: React.FC = () => {
     setResult(null);
     setErrorMsg(null);
     
+    const shopData: ShopData = {
+      shopName,
+      productType,
+      dailyCapacity, // Sending daily capacity
+      stockCapacity,
+      profitMargin,
+      marketplace,
+      shopStatus
+    };
+
     try {
-      const data = await analyzeStoreUrl(url, marketplace, notes);
+      const data = await analyzeShopStrategy(shopData, base64Data, mimeType);
       setResult(data);
     } catch (error: any) {
-      setErrorMsg(error.message || "Terjadi kesalahan saat menganalisa URL.");
+      setErrorMsg(error.message || "Gagal menganalisa strategi.");
     } finally {
       setLoading(false);
     }
   };
 
-  return (
-    <div className="bg-white rounded-xl shadow-sm border border-gray-100 overflow-hidden flex flex-col h-[650px]">
-      <div className="p-4 border-b border-gray-100 bg-gradient-to-r from-violet-600 to-indigo-600 text-white flex justify-between items-center">
-        <h2 className="text-lg font-semibold flex items-center gap-2">
-          <Bot className="w-6 h-6" />
-          Analisa Toko (Via URL)
-        </h2>
-        <select 
-          value={marketplace}
-          onChange={(e) => setMarketplace(e.target.value)}
-          className="bg-white/20 text-white border border-white/30 rounded px-2 py-1 text-sm focus:outline-none focus:ring-2 focus:ring-white/50"
-        >
-          <option value="Shopee" className="text-gray-900">Shopee</option>
-          <option value="TikTok Shop" className="text-gray-900">TikTok Shop</option>
-          <option value="Lazada" className="text-gray-900">Lazada</option>
-          <option value="Tokopedia" className="text-gray-900">Tokopedia</option>
-        </select>
-      </div>
+  const resetForm = () => {
+    setResult(null);
+    setErrorMsg(null);
+  };
 
-      <div className="flex-1 p-6 overflow-y-auto bg-gray-50">
-        {!result && !loading && !errorMsg && (
-          <div className="flex flex-col items-center justify-center h-full text-center text-gray-500 space-y-4">
-            <Search className="w-12 h-12 text-violet-400 opacity-50" />
-            <div className="max-w-md">
-              <h3 className="font-medium text-gray-800 mb-2">Cek Kesehatan Toko Anda</h3>
-              <p className="text-sm">
-                Masukkan link toko Anda (atau kompetitor). AI akan mengunjungi link tersebut, mencari data publik, dan memberikan analisa SWOT serta saran perbaikan.
-              </p>
-            </div>
-          </div>
-        )}
+  // --- RENDER FORM ---
+  if (!result) {
+    return (
+      <div className="bg-white rounded-xl shadow-sm border border-gray-100 overflow-hidden flex flex-col min-h-[600px]">
+        <div className="p-5 border-b border-gray-100 bg-gradient-to-r from-violet-600 to-indigo-600 text-white">
+          <h2 className="text-lg font-bold flex items-center gap-2">
+            <Bot className="w-6 h-6" />
+            AI Business Consultant
+          </h2>
+          <p className="text-xs text-indigo-100 mt-1 opacity-90">
+            Isi data toko Anda, AI akan merancang strategi cuan spesifik.
+          </p>
+        </div>
 
-        {loading && (
-          <div className="flex flex-col items-center justify-center h-full text-indigo-600 animate-pulse">
-            <Loader2 className="w-10 h-10 animate-spin mb-3" />
-            <p className="font-medium">Sedang mengunjungi URL & Menganalisa...</p>
-            <p className="text-xs text-gray-400 mt-2">Ini menggunakan Google Search Real-time</p>
-          </div>
-        )}
-
-        {errorMsg && (
-          <div className="flex flex-col items-center justify-center h-full text-center p-4">
-             <AlertCircle className="w-10 h-10 text-red-500 mb-3" />
-             <p className="text-gray-800 font-medium mb-1">Gagal Menganalisa</p>
-             <p className="text-sm text-gray-500 px-4 break-words max-w-full leading-relaxed">{errorMsg}</p>
-             <button onClick={() => setErrorMsg(null)} className="mt-4 text-sm text-indigo-600 hover:underline">Coba Lagi</button>
-          </div>
-        )}
-
-        {result && (
-          <div className="space-y-4 animate-fade-in">
-             <div className="prose prose-sm prose-indigo max-w-none bg-white p-6 rounded-xl shadow-sm border border-gray-100">
-              <ReactMarkdown>{result.text}</ReactMarkdown>
-            </div>
-
-            {/* Grounding Sources */}
-            {result.sources.length > 0 && (
-              <div className="bg-gray-100 p-4 rounded-xl border border-gray-200">
-                <h4 className="text-xs font-bold text-gray-500 uppercase mb-2 flex items-center gap-1">
-                  <ExternalLink className="w-3 h-3" /> Sumber Referensi Pencarian
-                </h4>
-                <div className="grid gap-2">
-                  {result.sources.map((source, idx) => (
-                    <a 
-                      key={idx} 
-                      href={source.uri} 
-                      target="_blank" 
-                      rel="noopener noreferrer"
-                      className="flex items-center gap-2 text-xs text-indigo-600 hover:underline bg-white p-2 rounded border border-gray-200"
-                    >
-                      <LinkIcon className="w-3 h-3 flex-shrink-0" />
-                      <span className="truncate">{source.title}</span>
-                    </a>
-                  ))}
+        <div className="flex-1 p-6 overflow-y-auto bg-slate-50">
+          <div className="space-y-5">
+            
+            {/* 1. Identitas Toko */}
+            <div className="bg-white p-4 rounded-xl shadow-sm border border-slate-100 space-y-4">
+              <h3 className="text-sm font-bold text-slate-700 flex items-center gap-2">
+                <Store className="w-4 h-4 text-violet-500" /> Identitas Toko
+              </h3>
+              
+              <div className="grid grid-cols-1 gap-3">
+                <div>
+                   <label className="text-xs font-semibold text-slate-500 mb-1 block">Nama Toko</label>
+                   <input
+                    type="text"
+                    value={shopName}
+                    onChange={(e) => setShopName(e.target.value)}
+                    placeholder="Contoh: Berkah Fashion Official"
+                    className="w-full p-2.5 bg-slate-50 border border-slate-200 rounded-lg text-sm focus:ring-violet-500 focus:border-violet-500"
+                  />
+                </div>
+                
+                <div className="grid grid-cols-2 gap-3">
+                    <div>
+                        <label className="text-xs font-semibold text-slate-500 mb-1 block">Marketplace</label>
+                        <select 
+                            value={marketplace}
+                            onChange={(e) => setMarketplace(e.target.value)}
+                            className="w-full p-2.5 bg-slate-50 border border-slate-200 rounded-lg text-sm"
+                            >
+                            <option value="Shopee">Shopee</option>
+                            <option value="TikTok Shop">TikTok Shop</option>
+                            <option value="Lazada">Lazada</option>
+                            <option value="Tokopedia">Tokopedia</option>
+                        </select>
+                    </div>
+                    <div>
+                        <label className="text-xs font-semibold text-slate-500 mb-1 block">Status Toko</label>
+                        <select 
+                            value={shopStatus}
+                            onChange={(e) => setShopStatus(e.target.value as 'NEW' | 'ESTABLISHED')}
+                            className="w-full p-2.5 bg-slate-50 border border-slate-200 rounded-lg text-sm"
+                            >
+                            <option value="NEW">Baru Buka</option>
+                            <option value="ESTABLISHED">Sudah Berjalan</option>
+                        </select>
+                    </div>
                 </div>
               </div>
-            )}
-          </div>
-        )}
-      </div>
+            </div>
 
-      <div className="p-4 bg-white border-t border-gray-100 space-y-3">
-        <div className="relative">
-          <div className="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none">
-            <LinkIcon className="h-4 w-4 text-gray-400" />
+            {/* 2. Detail Produk & Stok */}
+            <div className="bg-white p-4 rounded-xl shadow-sm border border-slate-100 space-y-4">
+              <h3 className="text-sm font-bold text-slate-700 flex items-center gap-2">
+                <Box className="w-4 h-4 text-pink-500" /> Produk & Operasional
+              </h3>
+              
+              <div>
+                 <label className="text-xs font-semibold text-slate-500 mb-1 block">Jenis Produk</label>
+                 <input
+                  type="text"
+                  value={productType}
+                  onChange={(e) => setProductType(e.target.value)}
+                  placeholder="Contoh: Hijab Instan, Snack Kering"
+                  className="w-full p-2.5 bg-slate-50 border border-slate-200 rounded-lg text-sm"
+                />
+              </div>
+
+              <div className="grid grid-cols-2 gap-3">
+                <div>
+                  <label className="text-xs font-semibold text-slate-500 mb-1 flex items-center gap-1">
+                     Kapasitas Kirim <Truck className="w-3 h-3 text-slate-400"/>
+                  </label>
+                  <input
+                    type="number"
+                    value={dailyCapacity}
+                    onChange={(e) => setDailyCapacity(e.target.value)}
+                    placeholder="50 paket/hari"
+                    className="w-full p-2.5 bg-slate-50 border border-slate-200 rounded-lg text-sm"
+                  />
+                  <p className="text-[9px] text-slate-400 mt-0.5">Mampu packing brp per hari?</p>
+                </div>
+                <div>
+                  <label className="text-xs font-semibold text-slate-500 mb-1 block">Total Stok Tersedia</label>
+                  <input
+                    type="number"
+                    value={stockCapacity}
+                    onChange={(e) => setStockCapacity(e.target.value)}
+                    placeholder="1000 pcs"
+                    className="w-full p-2.5 bg-slate-50 border border-slate-200 rounded-lg text-sm"
+                  />
+                </div>
+              </div>
+
+              <div>
+                 <label className="text-xs font-semibold text-slate-500 mb-1 block">Target Profit Margin (%)</label>
+                 <div className="relative">
+                   <input
+                    type="number"
+                    value={profitMargin}
+                    onChange={(e) => setProfitMargin(e.target.value)}
+                    placeholder="25"
+                    className="w-full pl-3 pr-8 p-2.5 bg-slate-50 border border-slate-200 rounded-lg text-sm"
+                  />
+                  <span className="absolute right-3 top-2.5 text-slate-400 text-sm">%</span>
+                 </div>
+                 <p className="text-[10px] text-slate-400 mt-1 italic">*Keuntungan bersih yang diinginkan per produk</p>
+              </div>
+            </div>
+
+            {/* 3. Upload Foto */}
+            <div className="bg-white p-4 rounded-xl shadow-sm border border-slate-100 space-y-4">
+              <h3 className="text-sm font-bold text-slate-700 flex items-center gap-2">
+                <ImagePlus className="w-4 h-4 text-indigo-500" /> Contoh Produk (Opsional)
+              </h3>
+              
+              <div 
+                onClick={() => fileInputRef.current?.click()}
+                className={`border-2 border-dashed rounded-xl h-40 flex flex-col items-center justify-center cursor-pointer transition-colors ${
+                  selectedImage ? 'border-indigo-300 bg-indigo-50/30' : 'border-slate-200 hover:border-indigo-400 hover:bg-indigo-50'
+                }`}
+              >
+                {selectedImage ? (
+                  <img src={selectedImage} alt="Preview" className="h-full w-full object-contain rounded-lg p-2" />
+                ) : (
+                  <div className="text-center text-slate-400">
+                    <ImagePlus className="w-8 h-8 mx-auto mb-2" />
+                    <p className="text-xs">Tap untuk upload foto</p>
+                  </div>
+                )}
+                <input 
+                  type="file" 
+                  ref={fileInputRef} 
+                  onChange={handleImageUpload} 
+                  accept="image/*" 
+                  className="hidden" 
+                />
+              </div>
+              <p className="text-[10px] text-slate-400">AI akan menilai kualitas visual produk Anda.</p>
+            </div>
+
           </div>
-          <input
-            type="text"
-            value={url}
-            onChange={(e) => setUrl(e.target.value)}
-            placeholder={`Paste Link Toko ${marketplace} di sini (Contoh: shopee.co.id/namatoko)`}
-            className="w-full pl-10 p-2.5 bg-gray-50 border border-gray-300 rounded-lg focus:ring-2 focus:ring-violet-500 focus:border-violet-500 text-sm"
-          />
+
+          {errorMsg && (
+            <div className="mt-4 p-3 bg-red-50 text-red-600 text-sm rounded-lg flex items-center gap-2">
+              <AlertCircle className="w-4 h-4 shrink-0" />
+              {errorMsg}
+            </div>
+          )}
         </div>
-        
-        <div className="flex gap-3">
-          <input
-            type="text"
-            value={notes}
-            onChange={(e) => setNotes(e.target.value)}
-            placeholder="Ada keluhan khusus? (Contoh: Kenapa traffic tinggi tapi yang beli sedikit?)"
-            className="flex-1 p-2.5 bg-gray-50 border border-gray-300 rounded-lg focus:ring-2 focus:ring-violet-500 focus:border-violet-500 text-sm"
-            onKeyDown={(e) => {
-              if (e.key === 'Enter') handleAnalysis();
-            }}
-          />
+
+        <div className="p-4 bg-white border-t border-slate-100">
           <button
             onClick={handleAnalysis}
-            disabled={loading || !url.trim()}
-            className="px-6 bg-violet-600 text-white rounded-lg hover:bg-violet-700 disabled:opacity-50 disabled:cursor-not-allowed flex items-center justify-center transition-colors font-medium text-sm"
+            disabled={loading}
+            className="w-full bg-indigo-600 hover:bg-indigo-700 text-white py-3.5 rounded-xl font-bold shadow-lg shadow-indigo-200 active:scale-95 transition-all flex items-center justify-center gap-2"
           >
-            {loading ? <Loader2 className="w-5 h-5 animate-spin" /> : "Analisa"}
+            {loading ? <Loader2 className="w-5 h-5 animate-spin" /> : <Bot className="w-5 h-5" />}
+            {loading ? "AI Sedang Berpikir..." : "Minta Saran Strategi"}
           </button>
+        </div>
+      </div>
+    );
+  }
+
+  // --- RENDER RESULT ---
+  return (
+    <div className="bg-white rounded-xl shadow-sm border border-gray-100 overflow-hidden flex flex-col h-[650px]">
+      <div className="p-4 border-b border-gray-100 bg-white flex justify-between items-center sticky top-0 z-10">
+        <h2 className="text-lg font-bold text-slate-800 flex items-center gap-2">
+          <TrendingUp className="w-5 h-5 text-indigo-600" />
+          Laporan Strategi
+        </h2>
+        <button 
+          onClick={resetForm}
+          className="text-xs font-semibold text-slate-500 flex items-center gap-1 hover:text-indigo-600 bg-slate-100 px-3 py-1.5 rounded-lg transition-colors"
+        >
+          <RefreshCcw className="w-3 h-3" /> Ulangi
+        </button>
+      </div>
+
+      <div className="flex-1 p-6 overflow-y-auto bg-slate-50/50 custom-scrollbar">
+        <div className="animate-fade-in space-y-6">
+          
+          {/* Header Summary */}
+          <div className="bg-indigo-900 text-white p-5 rounded-2xl shadow-lg relative overflow-hidden">
+             <div className="absolute top-[-20px] right-[-20px] w-32 h-32 bg-indigo-500 rounded-full blur-3xl opacity-30"></div>
+             <h3 className="text-xl font-bold mb-1">{shopName}</h3>
+             <div className="flex flex-wrap items-center gap-2 text-indigo-200 text-xs mt-2">
+                <span className="bg-indigo-800 px-2 py-1 rounded flex items-center gap-1"><Tag className="w-3 h-3"/> {productType}</span>
+                <span className="bg-indigo-800 px-2 py-1 rounded flex items-center gap-1"><Store className="w-3 h-3"/> {marketplace}</span>
+                <span className={`px-2 py-1 rounded flex items-center gap-1 font-bold ${shopStatus === 'NEW' ? 'bg-green-600 text-white' : 'bg-blue-600 text-white'}`}>
+                    <Award className="w-3 h-3"/> {shopStatus === 'NEW' ? 'Toko Baru' : 'Toko Lama'}
+                </span>
+             </div>
+          </div>
+
+          {/* AI Content */}
+          <div className="prose prose-sm prose-indigo max-w-none bg-white p-6 rounded-2xl shadow-sm border border-slate-100">
+            <ReactMarkdown
+              components={{
+                h1: ({node, ...props}) => <h1 className="text-xl font-bold text-slate-800 mb-4 pb-2 border-b border-slate-100" {...props} />,
+                h2: ({node, ...props}) => <h2 className="text-lg font-bold text-indigo-700 mt-6 mb-3 flex items-center gap-2" {...props} />,
+                strong: ({node, ...props}) => <strong className="font-bold text-slate-900" {...props} />,
+                ul: ({node, ...props}) => <ul className="list-disc pl-5 space-y-2 text-slate-600" {...props} />,
+                li: ({node, ...props}) => <li className="pl-1" {...props} />,
+                p: ({node, ...props}) => <p className="mb-3 text-slate-600 leading-relaxed" {...props} />,
+              }}
+            >
+              {result.text}
+            </ReactMarkdown>
+          </div>
+
+          {/* Call to Action for Calculator */}
+          <div className="bg-orange-50 border border-orange-100 p-4 rounded-xl flex items-start gap-3">
+             <AlertCircle className="w-5 h-5 text-orange-600 shrink-0 mt-0.5" />
+             <div>
+               <h4 className="text-sm font-bold text-orange-800">Jangan Lupa Hitung Profit!</h4>
+               <p className="text-xs text-orange-700 mt-1 leading-relaxed">
+                 AI sudah memberikan strategi. Sekarang pastikan harga jual Anda aman dari potongan admin {marketplace}. Gunakan menu <strong>"Harga"</strong> di bawah untuk simulasi.
+               </p>
+             </div>
+          </div>
+
         </div>
       </div>
     </div>

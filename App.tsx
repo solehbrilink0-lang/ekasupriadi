@@ -4,10 +4,11 @@ import PriceCalculator from './components/PriceCalculator';
 import RoasCalculator from './components/RoasCalculator';
 import AiAdvisor from './components/AiAdvisor';
 import ProductCreator from './components/ProductCreator';
-import { Calculator, Target, Bot, Sparkles, TrendingUp, User } from 'lucide-react';
+import DashboardHome from './components/DashboardHome';
+import { Calculator, Target, Bot, Sparkles, TrendingUp, User, Home } from 'lucide-react';
 
 const App: React.FC = () => {
-  const [mode, setMode] = useState<CalculationMode>(CalculationMode.PRICING);
+  const [mode, setMode] = useState<CalculationMode>(CalculationMode.DASHBOARD);
 
   const NavItem = ({ active, onClick, icon: Icon, label }: any) => (
     <button
@@ -17,9 +18,9 @@ const App: React.FC = () => {
       }`}
     >
       <div className={`p-1.5 rounded-xl transition-all ${active ? 'bg-indigo-50 scale-110' : 'bg-transparent'}`}>
-        <Icon className="w-6 h-6" strokeWidth={active ? 2.5 : 2} />
+        <Icon className="w-5 h-5" strokeWidth={active ? 2.5 : 2} />
       </div>
-      <span className={`text-[10px] mt-1 font-bold tracking-tight ${active ? 'opacity-100' : 'opacity-70'}`}>
+      <span className={`text-[9px] mt-1 font-bold tracking-tight ${active ? 'opacity-100' : 'opacity-70'}`}>
         {label}
       </span>
     </button>
@@ -37,6 +38,7 @@ const App: React.FC = () => {
               <span className="text-[10px] font-bold uppercase tracking-[0.2em]">Seller Pintar AI</span>
             </div>
             <h1 className="text-2xl font-extrabold tracking-tight">
+              {mode === CalculationMode.DASHBOARD && "Beranda"}
               {mode === CalculationMode.PRICING && "Cek Profit"}
               {mode === CalculationMode.ROAS && "Audit Iklan"}
               {mode === CalculationMode.CREATOR && "Magic Content"}
@@ -52,6 +54,7 @@ const App: React.FC = () => {
       {/* Main Content Area */}
       <main className="flex-1 px-4 -mt-8 relative z-20 pb-24 overflow-y-auto no-scrollbar">
         <div className="animate-fade-up">
+          {mode === CalculationMode.DASHBOARD && <DashboardHome onChangeMode={setMode} />}
           {mode === CalculationMode.PRICING && <PriceCalculator />}
           {mode === CalculationMode.ROAS && <RoasCalculator />}
           {mode === CalculationMode.CREATOR && <ProductCreator />}
@@ -61,7 +64,13 @@ const App: React.FC = () => {
 
       {/* Floating Bottom Navigation */}
       <nav className="fixed bottom-0 left-0 right-0 bg-white/80 backdrop-blur-xl border-t border-slate-100 pb-safe z-50 max-w-md mx-auto">
-        <div className="flex justify-around items-center h-16 px-4">
+        <div className="flex justify-around items-center h-16 px-2">
+           <NavItem 
+            active={mode === CalculationMode.DASHBOARD} 
+            onClick={() => setMode(CalculationMode.DASHBOARD)} 
+            icon={Home} 
+            label="BERANDA" 
+          />
           <NavItem 
             active={mode === CalculationMode.PRICING} 
             onClick={() => setMode(CalculationMode.PRICING)} 

@@ -1,3 +1,4 @@
+
 export enum Marketplace {
   SHOPEE = 'Shopee',
   TIKTOK = 'TikTok Shop',
@@ -7,6 +8,7 @@ export enum Marketplace {
 }
 
 export enum CalculationMode {
+  DASHBOARD = 'dashboard', // New Mode
   PRICING = 'pricing',
   ROAS = 'roas',
   ANALYSIS = 'analysis',
@@ -42,4 +44,12 @@ export interface ProductListingResult {
   seoDescription: string;
   discountStrategy: string;
   suggestedDiscountPercentage: number;
+}
+
+export interface DailyInsightResult {
+  headline: string;
+  strategy: string;
+  marketMood: 'FIRE' | 'SLOW' | 'NORMAL';
+  trendingCategories: string[];
+  actionItem: string;
 }
