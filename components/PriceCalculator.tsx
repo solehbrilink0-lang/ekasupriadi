@@ -13,6 +13,57 @@ const MARKETPLACE_FEES = {
 
 type InputType = 'PERCENT' | 'NOMINAL';
 
+// --- UI COMPONENTS (Moved Outside) ---
+const InputToggle = ({ label, icon: Icon, value, setValue, type, setType, placeholder }: any) => (
+  <div className="space-y-1">
+    <label className="text-[10px] font-bold text-slate-400 uppercase tracking-widest ml-1">{label}</label>
+    <div className="flex rounded-2xl bg-slate-50 border border-slate-100 overflow-hidden focus-within:ring-2 focus-within:ring-indigo-500 transition-all">
+      <div className="pl-3 py-3 flex items-center justify-center text-slate-400">
+        <Icon className="w-4 h-4" />
+      </div>
+      <input 
+        type="number" 
+        value={value} 
+        onChange={(e) => setValue(e.target.value)} 
+        placeholder={placeholder}
+        className="flex-1 bg-transparent border-none text-sm font-bold text-slate-700 focus:ring-0 px-2 py-3 outline-none" 
+      />
+      <div className="flex border-l border-slate-200">
+        <button 
+          onClick={() => setType('PERCENT')}
+          className={`px-3 text-xs font-bold transition-colors ${type === 'PERCENT' ? 'bg-indigo-100 text-indigo-700' : 'bg-transparent text-slate-400 hover:text-slate-600'}`}
+        >
+          %
+        </button>
+        <button 
+          onClick={() => setType('NOMINAL')}
+          className={`px-3 text-xs font-bold transition-colors ${type === 'NOMINAL' ? 'bg-indigo-100 text-indigo-700' : 'bg-transparent text-slate-400 hover:text-slate-600'}`}
+        >
+          Rp
+        </button>
+      </div>
+    </div>
+  </div>
+);
+
+const SimpleInput = ({ label, icon: Icon, value, setValue, prefix = "Rp", placeholder }: any) => (
+  <div className="space-y-1">
+    <label className="text-[10px] font-bold text-slate-400 uppercase tracking-widest ml-1">{label}</label>
+    <div className="relative">
+      <div className="absolute left-4 top-1/2 -translate-y-1/2 text-slate-400">
+        {Icon ? <Icon className="w-4 h-4" /> : <span className="text-[10px] font-bold">{prefix}</span>}
+      </div>
+      <input 
+        type="number" 
+        value={value} 
+        onChange={(e) => setValue(e.target.value)} 
+        placeholder={placeholder} 
+        className="w-full bg-slate-50 border border-slate-100 rounded-2xl pl-10 pr-4 py-3.5 text-sm font-bold text-slate-700 outline-none focus:ring-2 focus:ring-indigo-500 transition-all" 
+      />
+    </div>
+  </div>
+);
+
 const PriceCalculator: React.FC = () => {
   // --- STATE ---
   const [marketplace, setMarketplace] = useState<Marketplace>(Marketplace.SHOPEE);
@@ -134,57 +185,6 @@ const PriceCalculator: React.FC = () => {
 
   const currentFees = MARKETPLACE_FEES[marketplace];
   const totalFeePercent = currentFees.admin + currentFees.transaction + currentFees.shipping;
-
-  // --- UI COMPONENTS ---
-  const InputToggle = ({ label, icon: Icon, value, setValue, type, setType, placeholder }: any) => (
-    <div className="space-y-1">
-      <label className="text-[10px] font-bold text-slate-400 uppercase tracking-widest ml-1">{label}</label>
-      <div className="flex rounded-2xl bg-slate-50 border border-slate-100 overflow-hidden focus-within:ring-2 focus-within:ring-indigo-500 transition-all">
-        <div className="pl-3 py-3 flex items-center justify-center text-slate-400">
-          <Icon className="w-4 h-4" />
-        </div>
-        <input 
-          type="number" 
-          value={value} 
-          onChange={(e) => setValue(e.target.value)} 
-          placeholder={placeholder}
-          className="flex-1 bg-transparent border-none text-sm font-bold text-slate-700 focus:ring-0 px-2 py-3 outline-none" 
-        />
-        <div className="flex border-l border-slate-200">
-          <button 
-            onClick={() => setType('PERCENT')}
-            className={`px-3 text-xs font-bold transition-colors ${type === 'PERCENT' ? 'bg-indigo-100 text-indigo-700' : 'bg-transparent text-slate-400 hover:text-slate-600'}`}
-          >
-            %
-          </button>
-          <button 
-            onClick={() => setType('NOMINAL')}
-            className={`px-3 text-xs font-bold transition-colors ${type === 'NOMINAL' ? 'bg-indigo-100 text-indigo-700' : 'bg-transparent text-slate-400 hover:text-slate-600'}`}
-          >
-            Rp
-          </button>
-        </div>
-      </div>
-    </div>
-  );
-
-  const SimpleInput = ({ label, icon: Icon, value, setValue, prefix = "Rp", placeholder }: any) => (
-    <div className="space-y-1">
-      <label className="text-[10px] font-bold text-slate-400 uppercase tracking-widest ml-1">{label}</label>
-      <div className="relative">
-        <div className="absolute left-4 top-1/2 -translate-y-1/2 text-slate-400">
-          {Icon ? <Icon className="w-4 h-4" /> : <span className="text-[10px] font-bold">{prefix}</span>}
-        </div>
-        <input 
-          type="number" 
-          value={value} 
-          onChange={(e) => setValue(e.target.value)} 
-          placeholder={placeholder} 
-          className="w-full bg-slate-50 border border-slate-100 rounded-2xl pl-10 pr-4 py-3.5 text-sm font-bold text-slate-700 outline-none focus:ring-2 focus:ring-indigo-500 transition-all" 
-        />
-      </div>
-    </div>
-  );
 
   return (
     <div className="space-y-8 pb-10">
