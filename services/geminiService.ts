@@ -28,7 +28,7 @@ export const analyzeCompetitorOrShop = async (
     return response.text || "Maaf, tidak dapat menghasilkan analisa saat ini.";
   } catch (error) {
     console.error("Gemini Analysis Error:", error);
-    return "Terjadi kesalahan saat menghubungi AI Consultant.";
+    return "Terjadi kesalahan saat menghubungi AI Consultant. Mohon coba lagi nanti.";
   }
 };
 
@@ -107,18 +107,28 @@ export const analyzeStoreUrl = async (
 
   } catch (error: any) {
     console.error("Store Analysis Error:", error);
-    // Propagate the ACTUAL error message to the UI for better debugging
-    const errorDetail = error.message || error.toString();
     
-    if (errorDetail.includes("400")) {
+    // Normalize error string for checking
+    const errorDetail = error.message || error.toString();
+    const errString = errorDetail.toLowerCase();
+
+    // Specific Error Handling
+    if (errString.includes("429") || errString.includes("quota") || errString.includes("resource_exhausted")) {
+        throw new Error("Kuota AI sedang penuh/limit tercapai. Mohon tunggu 1-2 menit sebelum mencoba lagi.");
+    } else if (errString.includes("400")) {
         throw new Error("URL tidak valid atau format permintaan ditolak oleh server.");
-    } else if (errorDetail.includes("503") || errorDetail.includes("500")) {
+    } else if (errString.includes("503") || errString.includes("500") || errString.includes("overloaded")) {
         throw new Error("Layanan AI sedang sibuk. Silakan coba 1 menit lagi.");
-    } else if (errorDetail.includes("fetch")) {
-        throw new Error("Koneksi gagal. Periksa internet atau matikan VPN/AdBlock.");
+    } else if (errString.includes("fetch") || errString.includes("network") || errString.includes("failed to fetch")) {
+        throw new Error("Koneksi gagal. Periksa internet Anda (VPN/AdBlock mungkin memblokir).");
     }
 
-    throw new Error(`Gagal: ${errorDetail}`);
+    // Fallback: If it's a raw JSON error, simplify it
+    if (errorDetail.includes("{") && errorDetail.includes("}")) {
+        throw new Error("Terjadi gangguan pada sistem AI. Silakan coba lagi nanti.");
+    }
+
+    throw new Error(`Gagal: ${errorDetail.substring(0, 100)}...`);
   }
 };
 

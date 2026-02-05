@@ -75,7 +75,7 @@ const AiAdvisor: React.FC = () => {
           <div className="flex flex-col items-center justify-center h-full text-center p-4">
              <AlertCircle className="w-10 h-10 text-red-500 mb-3" />
              <p className="text-gray-800 font-medium mb-1">Gagal Menganalisa</p>
-             <p className="text-sm text-gray-500">{errorMsg}</p>
+             <p className="text-sm text-gray-500 px-4 break-words max-w-full leading-relaxed">{errorMsg}</p>
              <button onClick={() => setErrorMsg(null)} className="mt-4 text-sm text-indigo-600 hover:underline">Coba Lagi</button>
           </div>
         )}
