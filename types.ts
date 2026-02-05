@@ -21,7 +21,7 @@ export interface PricingResult {
   breakdown: {
     admin: number;
     transaction: number;
-    shipping: number;
+    program: number; // New: Gratis Ongkir Xtra + Cashback Xtra
     affiliate: number;
     marketing: number; // Voucher + Bundle
     operational: number; // Packing + Other

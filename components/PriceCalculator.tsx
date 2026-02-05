@@ -1,19 +1,71 @@
 import React, { useState, useEffect } from 'react';
 import { Marketplace, PricingResult } from '../types';
-import { PieChart, Pie, Cell, ResponsiveContainer } from 'recharts';
-import { ChevronDown, DollarSign, Store, Percent, Box, Gift, Ticket, Share2, Package, Info } from 'lucide-react';
+import { ChevronDown, DollarSign, Store, Percent, Box, Gift, Ticket, Share2, Package, CheckCircle2, Zap, Truck } from 'lucide-react';
 
-const MARKETPLACE_FEES = {
-  [Marketplace.SHOPEE]: { admin: 6.5, transaction: 4.0, shipping: 4.0 }, // Approx 14.5% total
-  [Marketplace.TIKTOK]: { admin: 4.0, transaction: 3.0, shipping: 3.0 },
-  [Marketplace.LAZADA]: { admin: 3.5, transaction: 2.0, shipping: 2.5 },
-  [Marketplace.TOKOPEDIA]: { admin: 5.5, transaction: 4.0, shipping: 3.5 },
-  [Marketplace.OTHER]: { admin: 0, transaction: 0, shipping: 0 },
+// --- CONFIGURATION ---
+// Data estimasi fee berdasarkan kebijakan terbaru (Safe Estimates agar tidak rugi)
+const MARKETPLACE_CONFIG = {
+  [Marketplace.SHOPEE]: {
+    transactionFee: 4.0, // Biaya Transaksi/Layanan
+    tiers: [
+      { id: 'NON_STAR', label: 'Non-Star (Regular)', admin: 4.0 }, 
+      { id: 'STAR', label: 'Star / Star+', admin: 6.5 }, 
+      { id: 'MALL', label: 'Shopee Mall', admin: 8.5 } 
+    ],
+    programs: {
+      freeShipping: { label: 'Gratis Ongkir Xtra', value: 5.6 }, // Max 10rb biasanya, tapi kita ambil % aman
+      cashback: { label: 'Cashback Xtra', value: 1.4 }
+    }
+  },
+  [Marketplace.TOKOPEDIA]: {
+    transactionFee: 0, // Tokped biasanya include di admin atau biaya layanan Rp1.000 (flat) ke buyer, kita simpan 0 atau kecil
+    tiers: [
+      { id: 'REGULAR', label: 'Regular Merchant', admin: 3.8 },
+      { id: 'POWER', label: 'Power Merchant', admin: 4.5 },
+      { id: 'PRO', label: 'Power Merchant Pro', admin: 5.5 },
+      { id: 'OFFICIAL', label: 'Official Store', admin: 6.5 }
+    ],
+    programs: {
+      freeShipping: { label: 'Bebas Ongkir (Wajib PM)', value: 4.0 },
+      cashback: { label: 'Diskon/Cashback Xtra', value: 0 } // Tokped lebih sering main voucher toko manual
+    }
+  },
+  [Marketplace.TIKTOK]: {
+    transactionFee: 3.0, // Payment Fee
+    tiers: [
+      { id: 'REGULAR', label: 'Regular Seller', admin: 4.5 }, 
+      { id: 'OFFICIAL', label: 'Official / Mall', admin: 6.0 }
+    ],
+    programs: {
+      freeShipping: { label: 'Xtra Shipping (FSP)', value: 4.0 },
+      cashback: { label: 'Mall/Campaign Fee', value: 0 } 
+    }
+  },
+  [Marketplace.LAZADA]: {
+    transactionFee: 2.0, // Payment Fee
+    tiers: [
+      { id: 'REGULAR', label: 'Regular Seller', admin: 3.5 },
+      { id: 'SUPER', label: 'Super Seller', admin: 4.5 },
+      { id: 'MALL', label: 'LazMall', admin: 6.0 }
+    ],
+    programs: {
+      freeShipping: { label: 'Free Shipping Max', value: 5.0 },
+      cashback: { label: 'Cashback Everyday', value: 3.0 }
+    }
+  },
+  [Marketplace.OTHER]: {
+    transactionFee: 0,
+    tiers: [{ id: 'DEFAULT', label: 'Default', admin: 0 }],
+    programs: {
+      freeShipping: { label: 'Program Ongkir', value: 0 },
+      cashback: { label: 'Program Cashback', value: 0 }
+    }
+  }
 };
 
 type InputType = 'PERCENT' | 'NOMINAL';
 
-// --- UI COMPONENTS (Moved Outside) ---
+// --- UI COMPONENTS (Outside) ---
 const InputToggle = ({ label, icon: Icon, value, setValue, type, setType, placeholder }: any) => (
   <div className="space-y-1">
     <label className="text-[10px] font-bold text-slate-400 uppercase tracking-widest ml-1">{label}</label>
@@ -64,13 +116,44 @@ const SimpleInput = ({ label, icon: Icon, value, setValue, prefix = "Rp", placeh
   </div>
 );
 
+const ProgramToggle = ({ label, percent, active, onToggle, icon: Icon }: any) => (
+  <button 
+    onClick={onToggle}
+    className={`w-full flex items-center justify-between p-3 rounded-xl border transition-all ${
+      active 
+        ? 'bg-indigo-50 border-indigo-200 shadow-sm' 
+        : 'bg-white border-slate-100 opacity-80 hover:opacity-100'
+    }`}
+  >
+    <div className="flex items-center gap-3">
+      <div className={`p-2 rounded-full ${active ? 'bg-indigo-100 text-indigo-600' : 'bg-slate-100 text-slate-400'}`}>
+        <Icon className="w-4 h-4" />
+      </div>
+      <div className="text-left">
+        <div className={`text-xs font-bold ${active ? 'text-indigo-900' : 'text-slate-500'}`}>{label}</div>
+        <div className={`text-[10px] ${active ? 'text-indigo-600' : 'text-slate-400'}`}>
+          Biaya: {percent}%
+        </div>
+      </div>
+    </div>
+    <div className={`w-5 h-5 rounded-full border flex items-center justify-center ${active ? 'bg-indigo-600 border-indigo-600' : 'border-slate-300'}`}>
+      {active && <CheckCircle2 className="w-3.5 h-3.5 text-white" />}
+    </div>
+  </button>
+);
+
 const PriceCalculator: React.FC = () => {
   // --- STATE ---
   const [marketplace, setMarketplace] = useState<Marketplace>(Marketplace.SHOPEE);
   
+  // New States for Advanced Fees
+  const [sellerTierId, setSellerTierId] = useState<string>(''); // Holds ID of tier
+  const [useFreeShipping, setUseFreeShipping] = useState<boolean>(false);
+  const [useCashback, setUseCashback] = useState<boolean>(false);
+
   // 1. Dasar
-  const [cogs, setCogs] = useState<string>(''); // Modal
-  const [desiredProfit, setDesiredProfit] = useState<string>(''); // Profit Bersih
+  const [cogs, setCogs] = useState<string>('');
+  const [desiredProfit, setDesiredProfit] = useState<string>('');
   
   // 2. Operasional
   const [packingCost, setPackingCost] = useState<string>('');
@@ -78,80 +161,83 @@ const PriceCalculator: React.FC = () => {
 
   // 3. Marketing & Promo
   const [affiliatePercent, setAffiliatePercent] = useState<string>('');
-  const [displayDiscount, setDisplayDiscount] = useState<string>(''); // Harga Coret %
+  const [displayDiscount, setDisplayDiscount] = useState<string>('');
   
   // Voucher Toko
   const [voucherType, setVoucherType] = useState<InputType>('NOMINAL');
   const [voucherValue, setVoucherValue] = useState<string>('');
 
-  // Bundle / Flexi Combo
+  // Bundle
   const [bundleType, setBundleType] = useState<InputType>('NOMINAL');
   const [bundleValue, setBundleValue] = useState<string>('');
 
   const [result, setResult] = useState<PricingResult | null>(null);
 
+  // Initialize tier when marketplace changes
+  useEffect(() => {
+    const config = MARKETPLACE_CONFIG[marketplace];
+    if (config && config.tiers.length > 0) {
+      setSellerTierId(config.tiers[0].id); // Default to first tier (usually Regular)
+      setUseFreeShipping(false);
+      setUseCashback(false);
+    }
+  }, [marketplace]);
+
   // --- LOGIC ---
   const handleCalculate = () => {
-    // Parse Inputs
+    // 1. Get Base Config
+    const config = MARKETPLACE_CONFIG[marketplace];
+    const tier = config.tiers.find(t => t.id === sellerTierId) || config.tiers[0];
+    
+    const feeAdmin = tier.admin;
+    const feeTrans = config.transactionFee;
+    
+    // 2. Get Program Fees
+    const feeFreeShipping = useFreeShipping ? config.programs.freeShipping.value : 0;
+    const feeCashback = useCashback ? config.programs.cashback.value : 0;
+
+    const totalProgramFee = feeFreeShipping + feeCashback;
+
+    // 3. Parse Inputs
     const valCogs = parseFloat(cogs) || 0;
     const valProfit = parseFloat(desiredProfit) || 0;
     const valPacking = parseFloat(packingCost) || 0;
     const valOther = parseFloat(otherCost) || 0;
-    
-    // Percentages (0-100)
-    const fees = MARKETPLACE_FEES[marketplace];
-    const feeAdmin = fees.admin;
-    const feeTrans = fees.transaction;
-    const feeShip = fees.shipping;
     const valAffiliate = parseFloat(affiliatePercent) || 0;
     const valDisplayDisc = parseFloat(displayDiscount) || 0;
-
-    // Voucher & Bundle logic
     const valVoucher = parseFloat(voucherValue) || 0;
     const valBundle = parseFloat(bundleValue) || 0;
 
     // --- FORMULA REVERSE CALCULATION ---
-    // Target: We want NetProfit AFTER all deductions.
-    // Price = Selling Price (Paid by buyer)
-    // Expenses = Cogs + Packing + Other
-    // Deductions from Price = Admin% + Trans% + Ship% + Affiliate%
-    // Promo Deductions = Voucher + Bundle (can be % or Fixed)
-    
-    // Equation:
-    // Price - (Price * TotalFee%) - (VoucherCost) - (BundleCost) - Expenses = Profit
-    
-    // Grouping Percentage Deductions (based on Selling Price)
-    let totalPercentDeduction = feeAdmin + feeTrans + feeShip + valAffiliate;
+    // Total % Deductions based on SELLING PRICE
+    let totalPercentDeduction = feeAdmin + feeTrans + totalProgramFee + valAffiliate;
     if (voucherType === 'PERCENT') totalPercentDeduction += valVoucher;
     if (bundleType === 'PERCENT') totalPercentDeduction += valBundle;
     
-    // Grouping Nominal Deductions
+    // Total Nominal Deductions (Costs + Profit)
     let totalNominalDeduction = valCogs + valPacking + valOther + valProfit;
     if (voucherType === 'NOMINAL') totalNominalDeduction += valVoucher;
     if (bundleType === 'NOMINAL') totalNominalDeduction += valBundle;
 
-    // Safety check
     if (totalPercentDeduction >= 95) {
-      alert("Total potongan persentase terlalu besar (di atas 95%). Cek kembali input Anda.");
+      alert("Total potongan persentase terlalu besar (di atas 95%).");
       return;
     }
 
-    // Calculate Selling Price (Harga Jual Tayang yang dibayar user)
-    // Price * (1 - TotalPercent/100) = TotalNominal
-    // Price = TotalNominal / (1 - TotalPercent/100)
+    // Selling Price = TotalNominal / (1 - TotalPercent/100)
     const sellingPrice = totalNominalDeduction / (1 - (totalPercentDeduction / 100));
 
-    // Calculate Display Price (Harga Coret)
-    // DisplayPrice * (1 - Disc%) = SellingPrice
-    // DisplayPrice = SellingPrice / (1 - Disc%)
+    // Display Price
     const displayPrice = valDisplayDisc > 0 
       ? sellingPrice / (1 - (valDisplayDisc / 100)) 
       : sellingPrice;
 
-    // Calculate Breakdown Values
+    // Breakdown
     const getVal = (pct: number) => sellingPrice * (pct / 100);
     
-    const moneyAdmin = getVal(feeAdmin + feeTrans + feeShip);
+    const moneyAdmin = getVal(feeAdmin);
+    const moneyTrans = getVal(feeTrans);
+    const moneyProgram = getVal(totalProgramFee);
     const moneyAffiliate = getVal(valAffiliate);
     
     let moneyMarketing = 0;
@@ -162,11 +248,11 @@ const PriceCalculator: React.FC = () => {
       sellingPrice,
       displayPrice,
       netProfit: valProfit,
-      totalFees: moneyAdmin + moneyAffiliate + moneyMarketing,
+      totalFees: moneyAdmin + moneyTrans + moneyProgram + moneyAffiliate + moneyMarketing,
       breakdown: {
-        admin: getVal(feeAdmin),
-        transaction: getVal(feeTrans),
-        shipping: getVal(feeShip),
+        admin: moneyAdmin,
+        transaction: moneyTrans,
+        program: moneyProgram,
         affiliate: moneyAffiliate,
         marketing: moneyMarketing,
         operational: valPacking + valOther,
@@ -175,21 +261,17 @@ const PriceCalculator: React.FC = () => {
     });
   };
 
-  const chartData = result ? [
-    { name: 'Modal', value: result.breakdown.cogs, color: '#64748b' }, // Slate
-    { name: 'Profit', value: result.netProfit, color: '#10b981' }, // Emerald
-    { name: 'MP Fees', value: result.breakdown.admin + result.breakdown.transaction + result.breakdown.shipping, color: '#f43f5e' }, // Rose
-    { name: 'Marketing', value: result.breakdown.affiliate + result.breakdown.marketing, color: '#f59e0b' }, // Amber
-    { name: 'Ops', value: result.breakdown.operational, color: '#6366f1' }, // Indigo
-  ] : [];
-
-  const currentFees = MARKETPLACE_FEES[marketplace];
-  const totalFeePercent = currentFees.admin + currentFees.transaction + currentFees.shipping;
+  // Helper to get current config for UI display
+  const currentConfig = MARKETPLACE_CONFIG[marketplace];
+  const currentTier = currentConfig.tiers.find(t => t.id === sellerTierId) || currentConfig.tiers[0];
+  const currentProgramFee = (useFreeShipping ? currentConfig.programs.freeShipping.value : 0) + 
+                            (useCashback ? currentConfig.programs.cashback.value : 0);
+  const totalAdminPercent = currentTier.admin + currentConfig.transactionFee + currentProgramFee;
 
   return (
     <div className="space-y-8 pb-10">
       
-      {/* 1. SECTION: RESULT (Sticky Top-ish feel or Prominent) */}
+      {/* 1. SECTION: RESULT */}
       {result && (
         <div className="bg-white rounded-[2.5rem] shadow-2xl shadow-indigo-100 border border-indigo-50 overflow-hidden relative animate-fade-up">
            <div className="absolute top-0 w-full h-2 bg-gradient-to-r from-indigo-500 via-purple-500 to-pink-500"></div>
@@ -222,28 +304,32 @@ const PriceCalculator: React.FC = () => {
              </div>
              <div className="bg-rose-50 p-3 rounded-2xl text-center">
                 <span className="block text-[10px] text-rose-500 font-bold uppercase mb-1">Total Potongan</span>
-                <span className="text-sm font-bold text-rose-600">Rp {Math.ceil(result.totalFees + result.breakdown.admin + result.breakdown.transaction + result.breakdown.shipping).toLocaleString('id-ID')}</span>
+                <span className="text-sm font-bold text-rose-600">Rp {Math.ceil(result.totalFees).toLocaleString('id-ID')}</span>
              </div>
            </div>
 
            {/* Breakdown Details */}
            <div className="bg-slate-50 px-6 py-4 border-t border-slate-100">
-             <h4 className="text-xs font-bold text-slate-500 mb-3">Rincian Potongan Marketplace</h4>
+             <h4 className="text-xs font-bold text-slate-500 mb-3">Rincian Potongan ({Math.ceil(result.totalFees / result.sellingPrice * 100)}%)</h4>
              <div className="space-y-2 text-xs text-slate-600">
                <div className="flex justify-between">
-                 <span>Admin & Layanan ({MARKETPLACE_FEES[marketplace].admin + MARKETPLACE_FEES[marketplace].transaction + MARKETPLACE_FEES[marketplace].shipping}%)</span>
-                 <span className="font-semibold text-rose-500">- Rp {Math.ceil(result.breakdown.admin + result.breakdown.transaction + result.breakdown.shipping).toLocaleString('id-ID')}</span>
+                 <span>Admin {currentTier.label}</span>
+                 <span className="font-semibold text-rose-500">- Rp {Math.ceil(result.breakdown.admin).toLocaleString('id-ID')}</span>
                </div>
+               <div className="flex justify-between">
+                 <span>Biaya Transaksi/Layanan</span>
+                 <span className="font-semibold text-rose-500">- Rp {Math.ceil(result.breakdown.transaction).toLocaleString('id-ID')}</span>
+               </div>
+               {result.breakdown.program > 0 && (
+                 <div className="flex justify-between">
+                   <span>Program Xtra (Ongkir/Cashback)</span>
+                   <span className="font-semibold text-rose-500">- Rp {Math.ceil(result.breakdown.program).toLocaleString('id-ID')}</span>
+                 </div>
+               )}
                {result.breakdown.affiliate > 0 && (
                  <div className="flex justify-between">
                    <span>Komisi Afiliasi</span>
                    <span className="font-semibold text-orange-500">- Rp {Math.ceil(result.breakdown.affiliate).toLocaleString('id-ID')}</span>
-                 </div>
-               )}
-               {(result.breakdown.marketing > 0) && (
-                 <div className="flex justify-between">
-                   <span>Voucher & Bundle</span>
-                   <span className="font-semibold text-orange-500">- Rp {Math.ceil(result.breakdown.marketing).toLocaleString('id-ID')}</span>
                  </div>
                )}
              </div>
@@ -251,42 +337,68 @@ const PriceCalculator: React.FC = () => {
         </div>
       )}
 
-      {/* 2. SECTION: INPUTS */}
+      {/* 2. SECTION: SETTINGS */}
       <div className="space-y-6">
         
-        {/* Marketplace Selector */}
-        <div>
-          <div className="bg-white p-2 rounded-[1.5rem] shadow-sm border border-slate-100 flex items-center">
-              <div className="p-3 bg-indigo-50 text-indigo-600 rounded-full">
-                <Store className="w-5 h-5" />
-              </div>
-              <select 
-                value={marketplace} 
-                onChange={(e) => setMarketplace(e.target.value as Marketplace)}
-                className="flex-1 bg-transparent text-sm font-bold text-slate-700 outline-none px-3 appearance-none cursor-pointer"
-              >
-                {Object.values(Marketplace).map(m => <option key={m} value={m}>{m}</option>)}
-              </select>
-              <ChevronDown className="w-5 h-5 text-slate-300 mr-3 pointer-events-none" />
-          </div>
+        {/* Marketplace & Tier Configuration */}
+        <div className="bg-white p-5 rounded-[2rem] border border-slate-100 shadow-sm">
+          <h3 className="text-sm font-bold text-slate-800 mb-4 flex items-center gap-2">
+             <Store className="w-4 h-4 text-indigo-600" />
+             Pengaturan Toko
+          </h3>
           
-          {/* Fee Information Display */}
-          <div className="grid grid-cols-4 gap-2 mt-3 px-1">
-            <div className="bg-slate-100 p-2 rounded-xl text-center">
-              <div className="text-[9px] font-bold text-slate-400 uppercase tracking-tighter">Admin</div>
-              <div className="text-xs font-bold text-slate-700">{currentFees.admin}%</div>
+          <div className="space-y-4">
+            {/* Marketplace Selector */}
+            <div className="bg-slate-50 p-2 rounded-2xl flex items-center border border-slate-200">
+                <select 
+                  value={marketplace} 
+                  onChange={(e) => setMarketplace(e.target.value as Marketplace)}
+                  className="flex-1 bg-transparent text-sm font-bold text-slate-700 outline-none px-3 py-1 cursor-pointer"
+                >
+                  {Object.values(Marketplace).map(m => <option key={m} value={m}>{m}</option>)}
+                </select>
+                <ChevronDown className="w-5 h-5 text-slate-400 mr-2 pointer-events-none" />
             </div>
-            <div className="bg-slate-100 p-2 rounded-xl text-center">
-              <div className="text-[9px] font-bold text-slate-400 uppercase tracking-tighter">Trans</div>
-              <div className="text-xs font-bold text-slate-700">{currentFees.transaction}%</div>
+
+            {/* Seller Tier Selector */}
+            <div className="space-y-1">
+               <label className="text-[10px] font-bold text-slate-400 uppercase tracking-widest ml-1">Tipe Seller / Status</label>
+               <div className="bg-slate-50 p-2 rounded-2xl flex items-center border border-slate-200">
+                  <select 
+                    value={sellerTierId}
+                    onChange={(e) => setSellerTierId(e.target.value)}
+                    className="flex-1 bg-transparent text-sm font-bold text-slate-700 outline-none px-3 py-1 cursor-pointer"
+                  >
+                    {currentConfig.tiers.map((t) => (
+                      <option key={t.id} value={t.id}>{t.label} (Admin {t.admin}%)</option>
+                    ))}
+                  </select>
+                  <ChevronDown className="w-5 h-5 text-slate-400 mr-2 pointer-events-none" />
+               </div>
             </div>
-            <div className="bg-slate-100 p-2 rounded-xl text-center">
-              <div className="text-[9px] font-bold text-slate-400 uppercase tracking-tighter">Layanan</div>
-              <div className="text-xs font-bold text-slate-700">{currentFees.shipping}%</div>
+
+            {/* Program Toggles */}
+            <div className="grid grid-cols-2 gap-3 pt-2">
+               <ProgramToggle 
+                  label={currentConfig.programs.freeShipping.label}
+                  percent={currentConfig.programs.freeShipping.value}
+                  active={useFreeShipping}
+                  onToggle={() => setUseFreeShipping(!useFreeShipping)}
+                  icon={Truck}
+               />
+               <ProgramToggle 
+                  label={currentConfig.programs.cashback.label}
+                  percent={currentConfig.programs.cashback.value}
+                  active={useCashback}
+                  onToggle={() => setUseCashback(!useCashback)}
+                  icon={Zap}
+               />
             </div>
-            <div className="bg-rose-50 border border-rose-100 p-2 rounded-xl text-center">
-              <div className="text-[9px] font-bold text-rose-400 uppercase tracking-tighter">Total</div>
-              <div className="text-xs font-bold text-rose-600">{totalFeePercent}%</div>
+            
+            {/* Total Admin Summary */}
+            <div className="bg-indigo-50 rounded-xl p-3 flex justify-between items-center border border-indigo-100">
+              <span className="text-xs font-bold text-indigo-800">Total Potongan Marketplace</span>
+              <span className="text-sm font-black text-indigo-600">{totalAdminPercent.toFixed(1)}%</span>
             </div>
           </div>
         </div>
@@ -363,9 +475,6 @@ const PriceCalculator: React.FC = () => {
                 placeholder="Contoh: 2"
               />
             </div>
-            <p className="text-[10px] text-slate-400 italic mt-2">
-              *Masukkan angka 0 jika tidak ada strategi promo.
-            </p>
           </div>
         </div>
 
