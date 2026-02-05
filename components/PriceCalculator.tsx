@@ -1,7 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import { Marketplace, PricingResult } from '../types';
 import { PieChart, Pie, Cell, ResponsiveContainer } from 'recharts';
-import { ChevronDown, DollarSign, Store, Percent, Box, Gift, Ticket, Share2, Package } from 'lucide-react';
+import { ChevronDown, DollarSign, Store, Percent, Box, Gift, Ticket, Share2, Package, Info } from 'lucide-react';
 
 const MARKETPLACE_FEES = {
   [Marketplace.SHOPEE]: { admin: 6.5, transaction: 4.0, shipping: 4.0 }, // Approx 14.5% total
@@ -132,6 +132,9 @@ const PriceCalculator: React.FC = () => {
     { name: 'Ops', value: result.breakdown.operational, color: '#6366f1' }, // Indigo
   ] : [];
 
+  const currentFees = MARKETPLACE_FEES[marketplace];
+  const totalFeePercent = currentFees.admin + currentFees.transaction + currentFees.shipping;
+
   // --- UI COMPONENTS ---
   const InputToggle = ({ label, icon: Icon, value, setValue, type, setType, placeholder }: any) => (
     <div className="space-y-1">
@@ -252,18 +255,40 @@ const PriceCalculator: React.FC = () => {
       <div className="space-y-6">
         
         {/* Marketplace Selector */}
-        <div className="bg-white p-2 rounded-[1.5rem] shadow-sm border border-slate-100 flex items-center">
-            <div className="p-3 bg-indigo-50 text-indigo-600 rounded-full">
-               <Store className="w-5 h-5" />
+        <div>
+          <div className="bg-white p-2 rounded-[1.5rem] shadow-sm border border-slate-100 flex items-center">
+              <div className="p-3 bg-indigo-50 text-indigo-600 rounded-full">
+                <Store className="w-5 h-5" />
+              </div>
+              <select 
+                value={marketplace} 
+                onChange={(e) => setMarketplace(e.target.value as Marketplace)}
+                className="flex-1 bg-transparent text-sm font-bold text-slate-700 outline-none px-3 appearance-none cursor-pointer"
+              >
+                {Object.values(Marketplace).map(m => <option key={m} value={m}>{m}</option>)}
+              </select>
+              <ChevronDown className="w-5 h-5 text-slate-300 mr-3 pointer-events-none" />
+          </div>
+          
+          {/* Fee Information Display */}
+          <div className="grid grid-cols-4 gap-2 mt-3 px-1">
+            <div className="bg-slate-100 p-2 rounded-xl text-center">
+              <div className="text-[9px] font-bold text-slate-400 uppercase tracking-tighter">Admin</div>
+              <div className="text-xs font-bold text-slate-700">{currentFees.admin}%</div>
             </div>
-            <select 
-              value={marketplace} 
-              onChange={(e) => setMarketplace(e.target.value as Marketplace)}
-              className="flex-1 bg-transparent text-sm font-bold text-slate-700 outline-none px-3 appearance-none cursor-pointer"
-            >
-              {Object.values(Marketplace).map(m => <option key={m} value={m}>{m}</option>)}
-            </select>
-            <ChevronDown className="w-5 h-5 text-slate-300 mr-3 pointer-events-none" />
+            <div className="bg-slate-100 p-2 rounded-xl text-center">
+              <div className="text-[9px] font-bold text-slate-400 uppercase tracking-tighter">Trans</div>
+              <div className="text-xs font-bold text-slate-700">{currentFees.transaction}%</div>
+            </div>
+            <div className="bg-slate-100 p-2 rounded-xl text-center">
+              <div className="text-[9px] font-bold text-slate-400 uppercase tracking-tighter">Layanan</div>
+              <div className="text-xs font-bold text-slate-700">{currentFees.shipping}%</div>
+            </div>
+            <div className="bg-rose-50 border border-rose-100 p-2 rounded-xl text-center">
+              <div className="text-[9px] font-bold text-rose-400 uppercase tracking-tighter">Total</div>
+              <div className="text-xs font-bold text-rose-600">{totalFeePercent}%</div>
+            </div>
+          </div>
         </div>
 
         {/* Group A: Biaya Dasar */}
