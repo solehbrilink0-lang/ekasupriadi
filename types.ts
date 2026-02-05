@@ -14,17 +14,18 @@ export enum CalculationMode {
 }
 
 export interface PricingResult {
-  sellingPrice: number;
+  sellingPrice: number; // Harga yang dibayar pembeli
+  displayPrice: number; // Harga coret (sebelum diskon display)
   totalFees: number;
   netProfit: number;
-  feeBreakdown: {
+  breakdown: {
     admin: number;
     transaction: number;
     shipping: number;
-    marketing: number; // Store discount gap
     affiliate: number;
-    voucher: number;
-    bundle: number;
+    marketing: number; // Voucher + Bundle
+    operational: number; // Packing + Other
+    cogs: number; // Modal
   };
 }
 
