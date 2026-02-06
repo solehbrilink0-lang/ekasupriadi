@@ -1,14 +1,33 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { CalculationMode } from './types';
 import PriceCalculator from './components/PriceCalculator';
 import RoasCalculator from './components/RoasCalculator';
 import AiAdvisor from './components/AiAdvisor';
 import ProductCreator from './components/ProductCreator';
 import DashboardHome from './components/DashboardHome';
-import { Calculator, Target, Bot, Sparkles, TrendingUp, User, Home } from 'lucide-react';
+import { Calculator, Target, Bot, Sparkles, TrendingUp, User, Home, Download } from 'lucide-react';
 
 const App: React.FC = () => {
   const [mode, setMode] = useState<CalculationMode>(CalculationMode.DASHBOARD);
+  const [installPrompt, setInstallPrompt] = useState<any>(null);
+
+  useEffect(() => {
+    const handler = (e: any) => {
+      e.preventDefault();
+      setInstallPrompt(e);
+    };
+    window.addEventListener('beforeinstallprompt', handler);
+    return () => window.removeEventListener('beforeinstallprompt', handler);
+  }, []);
+
+  const handleInstallClick = async () => {
+    if (!installPrompt) return;
+    installPrompt.prompt();
+    const { outcome } = await installPrompt.userChoice;
+    if (outcome === 'accepted') {
+      setInstallPrompt(null);
+    }
+  };
 
   const NavItem = ({ active, onClick, icon: Icon, label }: any) => (
     <button
@@ -45,8 +64,20 @@ const App: React.FC = () => {
               {mode === CalculationMode.ANALYSIS && "Market Insight"}
             </h1>
           </div>
-          <div className="w-10 h-10 rounded-full bg-white/20 backdrop-blur-md flex items-center justify-center border border-white/30">
-            <User className="w-5 h-5" />
+          
+          <div className="flex items-center gap-3">
+            {installPrompt && (
+              <button 
+                onClick={handleInstallClick}
+                className="bg-white/20 hover:bg-white/30 text-white px-3 py-2 rounded-xl text-xs font-bold transition-all flex items-center gap-2 backdrop-blur-md border border-white/20 animate-pulse"
+              >
+                <Download className="w-4 h-4" />
+                Install
+              </button>
+            )}
+            <div className="w-10 h-10 rounded-full bg-white/20 backdrop-blur-md flex items-center justify-center border border-white/30">
+              <User className="w-5 h-5" />
+            </div>
           </div>
         </div>
       </header>
