@@ -1,11 +1,12 @@
-
 import React, { createContext, useContext, useState, useEffect, ReactNode } from 'react';
 import { User } from '../types';
+import { auth, googleProvider } from '../firebaseConfig';
+import { signInWithPopup, signOut, onAuthStateChanged, User as FirebaseUser } from 'firebase/auth';
 
 interface UserContextType {
   user: User | null;
   login: () => Promise<void>;
-  logout: () => void;
+  logout: () => Promise<void>;
   deductCredit: () => Promise<boolean>; 
   addCredits: (amount: number) => Promise<void>;
   loadingAuth: boolean;
@@ -14,45 +15,81 @@ interface UserContextType {
 const UserContext = createContext<UserContextType | undefined>(undefined);
 
 export const UserProvider: React.FC<{ children: ReactNode }> = ({ children }) => {
-  const [credits, setCredits] = useState<number>(() => {
-    const saved = localStorage.getItem('sp_credits');
-    return saved ? parseInt(saved, 10) : 50; // Modal awal 50 koin untuk pengguna baru
-  });
+  const [user, setUser] = useState<User | null>(null);
+  const [loadingAuth, setLoadingAuth] = useState(true);
 
-  useEffect(() => {
-    localStorage.setItem('sp_credits', credits.toString());
-  }, [credits]);
-
-  // Mock user object for compatibility with other components
-  const user: User = {
-    id: 'guest',
-    name: 'Seller Hebat',
-    email: '',
-    avatar: '',
-    credits: credits,
-    isNewUser: false
+  // Fungsi helper untuk mengambil saldo dari LocalStorage berdasarkan UID
+  const getStoredCredits = (uid: string): number => {
+    const saved = localStorage.getItem(`sp_credits_${uid}`);
+    return saved ? parseInt(saved, 10) : 50; // Bonus 50 koin untuk user baru
   };
 
-  const login = async () => {}; // No-op
-  const logout = () => {
-    setCredits(50);
-    localStorage.removeItem('sp_credits');
+  const updateStoredCredits = (uid: string, amount: number) => {
+    localStorage.setItem(`sp_credits_${uid}`, amount.toString());
+  };
+
+  useEffect(() => {
+    // Listener status login Firebase
+    const unsubscribe = onAuthStateChanged(auth, (firebaseUser) => {
+      if (firebaseUser) {
+        const currentCredits = getStoredCredits(firebaseUser.uid);
+        
+        const appUser: User = {
+          id: firebaseUser.uid,
+          name: firebaseUser.displayName || 'Juragan Seller',
+          email: firebaseUser.email || '',
+          avatar: firebaseUser.photoURL || 'https://cdn-icons-png.flaticon.com/512/2652/2652218.png',
+          credits: currentCredits,
+          isNewUser: false 
+        };
+        setUser(appUser);
+      } else {
+        setUser(null);
+      }
+      setLoadingAuth(false);
+    });
+
+    return () => unsubscribe();
+  }, []);
+
+  const login = async () => {
+    try {
+      await signInWithPopup(auth, googleProvider);
+    } catch (error) {
+      console.error("Login Failed", error);
+      throw error;
+    }
+  };
+
+  const logout = async () => {
+    try {
+      await signOut(auth);
+      setUser(null);
+    } catch (error) {
+      console.error("Logout Failed", error);
+    }
   };
 
   const deductCredit = async (): Promise<boolean> => {
-    if (credits > 0) {
-      setCredits(prev => prev - 1);
+    if (user && user.credits > 0) {
+      const newCredits = user.credits - 1;
+      setUser({ ...user, credits: newCredits });
+      updateStoredCredits(user.id, newCredits);
       return true;
     }
     return false;
   };
 
   const addCredits = async (amount: number) => {
-    setCredits(prev => prev + amount);
+    if (user) {
+      const newCredits = user.credits + amount;
+      setUser({ ...user, credits: newCredits });
+      updateStoredCredits(user.id, newCredits);
+    }
   };
 
   return (
-    <UserContext.Provider value={{ user, login, logout, deductCredit, addCredits, loadingAuth: false }}>
+    <UserContext.Provider value={{ user, login, logout, deductCredit, addCredits, loadingAuth }}>
       {children}
     </UserContext.Provider>
   );

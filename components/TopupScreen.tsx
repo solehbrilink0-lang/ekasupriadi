@@ -1,13 +1,14 @@
 
 import React, { useState } from 'react';
 import { useUser } from '../contexts/UserContext';
-import { Coins, Zap, Crown, Loader2, CreditCard, CheckCircle2, ShieldCheck, Wallet } from 'lucide-react';
+import { functions } from '../firebaseConfig';
+import { httpsCallable } from 'firebase/functions';
+import { Coins, Zap, Crown, Loader2, CreditCard, CheckCircle2, ShieldCheck, Wallet, AlertCircle } from 'lucide-react';
 
 const TopupScreen: React.FC = () => {
   const { user, addCredits } = useUser();
   const [processing, setProcessing] = useState<string | null>(null);
 
-  // Semua paket kini memiliki benefit akses yang sama
   const packages = [
     { 
         id: 'starter', 
@@ -40,29 +41,83 @@ const TopupScreen: React.FC = () => {
   ];
 
   const handleMidtransPayment = async (pkg: any) => {
+    // 1. Cek Login
+    if (!user || user.id === 'guest') {
+        alert("Silakan login terlebih dahulu untuk melakukan Topup.");
+        return;
+    }
+
     setProcessing(pkg.id);
 
-    // --- SIMULASI LOGIC MIDTRANS ---
-    // Di aplikasi real, flow-nya adalah:
-    // 1. Panggil API Backend Anda untuk request SNAP TOKEN berdasarkan pkg.price & pkg.id
-    // 2. Panggil window.snap.pay(token)
-    // 3. Handle onSuccess callback
-    
-    // Simulasi Delay Network
-    setTimeout(() => {
-        // Simulasi Pembayaran Berhasil
-        const isConfirmed = window.confirm(`[SIMULASI MIDTRANS]\n\nMelakukan pembayaran sebesar Rp ${pkg.price.toLocaleString('id-ID')} via VA/QRIS/E-Wallet?\n\nKlik OK untuk bayar.`);
+    try {
+        // 2. Panggil Cloud Function 'createTransaction'
+        // NOTE: Karena Anda belum bisa deploy backend, ini mungkin akan error di console.
+        // Jika error, kode catch di bawah akan menangkapnya.
+        const createTransactionFn = httpsCallable(functions, 'createTransaction');
         
-        if (isConfirmed) {
-            addCredits(pkg.credits);
-            alert(`Pembayaran Berhasil! ${pkg.credits} Koin telah ditambahkan.`);
+        const response = await createTransactionFn({
+            price: pkg.price,
+            packageId: pkg.id,
+            packageName: pkg.name,
+            credits: pkg.credits
+        });
+
+        const data = response.data as { token: string; error?: string };
+
+        if (data.error) {
+            alert(`Gagal: ${data.error}`);
+            setProcessing(null);
+            return;
         }
+
+        // 3. Munculkan Pop-up Pembayaran (Snap)
+        if (window.snap) {
+            window.snap.pay(data.token, {
+                onSuccess: (result: any) => {
+                    console.log("Payment Success!", result);
+                    addCredits(pkg.credits); 
+                    alert(`Pembayaran Berhasil! ${pkg.credits} Koin ditambahkan.`);
+                    setProcessing(null);
+                },
+                onPending: (result: any) => {
+                    console.log("Payment Pending", result);
+                    alert("Menunggu pembayaran Anda...");
+                    setProcessing(null);
+                },
+                onError: (result: any) => {
+                    console.error("Payment Error", result);
+                    alert("Pembayaran gagal atau dibatalkan.");
+                    setProcessing(null);
+                },
+                onClose: () => {
+                    console.log("Customer closed the popup without finishing the payment");
+                    setProcessing(null);
+                }
+            });
+        } else {
+            alert("Sistem pembayaran belum siap (Snap.js belum termuat). Silakan refresh halaman.");
+            setProcessing(null);
+        }
+
+    } catch (error: any) {
+        console.error("Topup Error:", error);
+        
+        // --- SIMULASI MODE (FALLBACK) ---
+        // Karena backend belum dideploy, kita buat simulasi agar Anda bisa melihat UI-nya bekerja.
+        const confirmSimulasi = confirm("Koneksi ke backend gagal (karena belum dideploy). Apakah Anda ingin mensimulasikan Topup Sukses untuk tes UI?");
+        if (confirmSimulasi) {
+             addCredits(pkg.credits);
+             alert(`[MODE TES] ${pkg.credits} Koin ditambahkan ke akun.`);
+        } else {
+             alert(`Terjadi kesalahan koneksi: ${error.message}`);
+        }
+        
         setProcessing(null);
-    }, 1500);
+    }
   };
 
   return (
-    <div className="space-y-8 pb-24 lg:pb-0">
+    <div className="space-y-8 pb-24 lg:pb-0 animate-fade-up">
       
       {/* Header Saldo */}
       <div className="bg-slate-900 rounded-[2.5rem] p-8 md:p-12 text-center text-white relative overflow-hidden shadow-2xl max-w-4xl mx-auto border border-white/10">
@@ -111,7 +166,7 @@ const TopupScreen: React.FC = () => {
                                 className="w-full bg-slate-900 text-white py-4 rounded-2xl text-xs font-black flex items-center justify-center gap-3 hover:bg-black transition-all disabled:opacity-50 shadow-xl shadow-slate-200 active:scale-[0.98]"
                             >
                                 {processing === pkg.id ? <Loader2 className="w-5 h-5 animate-spin" /> : <Wallet className="w-5 h-5" />}
-                                BAYAR VIA MIDTRANS
+                                {processing === pkg.id ? "MEMPROSES..." : "BAYAR VIA MIDTRANS"}
                             </button>
                             <div className="mt-3 flex justify-center gap-2 opacity-40 grayscale">
                                 {/* Placeholder Icons for Midtrans Payment Methods */}

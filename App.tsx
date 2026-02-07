@@ -1,8 +1,8 @@
-
 import React, { useState, Suspense, lazy } from 'react';
 import { CalculationMode, PricingResult } from './types';
 import { UserProvider, useUser } from './contexts/UserContext';
-import { Calculator, Target, Bot, Sparkles, Home, BookOpen, TrendingUp, Loader2, Coins, Menu, X } from 'lucide-react';
+import { Calculator, Target, Bot, Sparkles, Home, BookOpen, TrendingUp, Loader2, Coins, LogOut } from 'lucide-react';
+import LoginScreen from './components/LoginScreen';
 
 // Lazy loading components for faster initial load
 const DashboardHome = lazy(() => import('./components/DashboardHome'));
@@ -23,9 +23,23 @@ const LoadingFallback = () => (
 );
 
 const AppContent: React.FC = () => {
-  const { user } = useUser();
+  const { user, loadingAuth, logout } = useUser();
   const [mode, setMode] = useState<CalculationMode>(CalculationMode.DASHBOARD);
   const [sharedPricingResult, setSharedPricingResult] = useState<PricingResult | null>(null);
+
+  // 1. Loading State saat cek status login
+  if (loadingAuth) {
+    return (
+      <div className="min-h-screen bg-slate-50 flex items-center justify-center">
+        <LoadingFallback />
+      </div>
+    );
+  }
+
+  // 2. Jika belum login, tampilkan Login Screen
+  if (!user) {
+    return <LoginScreen />;
+  }
 
   const navItems = [
     { mode: CalculationMode.DASHBOARD, icon: Home, label: "HOME" },
@@ -99,7 +113,7 @@ const AppContent: React.FC = () => {
            ))}
         </nav>
 
-        <div className="mt-auto pt-6 border-t border-slate-50">
+        <div className="mt-auto pt-6 border-t border-slate-50 space-y-3">
           <button 
             onClick={() => setMode(CalculationMode.TOPUP)}
             className="w-full bg-slate-900 text-white p-4 rounded-2xl flex items-center justify-between group transition-all duration-300 hover:shadow-xl hover:shadow-slate-200 hover:-translate-y-0.5"
@@ -116,6 +130,13 @@ const AppContent: React.FC = () => {
              <div className="bg-indigo-500 text-[9px] font-bold px-3 py-1.5 rounded-lg text-white group-hover:bg-indigo-400 transition-colors shadow-lg shadow-indigo-900/20">
                TOPUP
              </div>
+          </button>
+          
+          <button 
+            onClick={logout}
+            className="w-full flex items-center justify-center gap-2 p-3 rounded-xl text-xs font-bold text-rose-500 hover:bg-rose-50 transition-colors"
+          >
+            <LogOut className="w-4 h-4" /> Keluar Aplikasi
           </button>
         </div>
       </aside>
@@ -144,13 +165,21 @@ const AppContent: React.FC = () => {
             </h2>
           </div>
 
-          <button 
-            onClick={() => setMode(CalculationMode.TOPUP)}
-            className="md:hidden bg-slate-900 text-white px-4 py-2 rounded-full flex items-center gap-2 shadow-lg shadow-slate-200 hover:scale-105 transition-transform"
-          >
-            <Coins className="w-3.5 h-3.5 text-amber-300" />
-            <span className="text-xs font-black">{user?.credits || 0}</span>
-          </button>
+          <div className="flex items-center gap-3">
+             <div className="hidden md:flex flex-col items-end mr-2">
+                <span className="text-xs font-black text-slate-800">{user.name}</span>
+                <span className="text-[10px] text-slate-400">Juragan</span>
+             </div>
+             <img src={user.avatar} alt="Profile" className="w-8 h-8 rounded-full border border-slate-200 shadow-sm" />
+             
+             <button 
+                onClick={() => setMode(CalculationMode.TOPUP)}
+                className="md:hidden bg-slate-900 text-white px-4 py-2 rounded-full flex items-center gap-2 shadow-lg shadow-slate-200 hover:scale-105 transition-transform"
+             >
+                <Coins className="w-3.5 h-3.5 text-amber-300" />
+                <span className="text-xs font-black">{user?.credits || 0}</span>
+             </button>
+          </div>
         </header>
 
         {/* Scrollable Content */}
