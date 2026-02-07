@@ -42,7 +42,7 @@ const TopupScreen: React.FC = () => {
 
   const handleMidtransPayment = async (pkg: any) => {
     // 1. Cek Login
-    if (!user || user.id === 'guest') {
+    if (!user) {
         alert("Silakan login terlebih dahulu untuk melakukan Topup.");
         return;
     }
