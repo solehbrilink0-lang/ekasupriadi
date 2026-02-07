@@ -7,7 +7,6 @@ interface UserContextType {
   user: User | null;
   login: () => Promise<void>;
   logout: () => Promise<void>;
-  loginAsGuest: () => Promise<void>;
   deductCredit: () => Promise<boolean>; 
   addCredits: (amount: number) => Promise<void>;
   loadingAuth: boolean;
@@ -45,8 +44,8 @@ export const UserProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
         };
         setUser(appUser);
       } else {
-        // Jangan reset user jika sedang mode tamu (guest_user)
-        setUser(prev => (prev?.id === 'guest_user' ? prev : null));
+        // Reset user jika tidak ada sesi aktif
+        setUser(null);
       }
       setLoadingAuth(false);
     });
@@ -58,29 +57,8 @@ export const UserProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
     try {
       await signInWithPopup(auth, googleProvider);
     } catch (error) {
-      // Re-throw agar bisa ditangkap oleh LoginScreen untuk handling spesifik (seperti unauthorized domain)
       throw error;
     }
-  };
-
-  const loginAsGuest = async () => {
-    const guestId = 'guest_user';
-    // Beri saldo awal 100 jika belum ada
-    if (!localStorage.getItem(`sp_credits_${guestId}`)) {
-       updateStoredCredits(guestId, 100);
-    }
-    const currentCredits = getStoredCredits(guestId);
-
-    const guestUser: User = {
-      id: guestId,
-      name: 'Tamu Juragan',
-      email: 'guest@sellerpintar.com',
-      avatar: 'https://cdn-icons-png.flaticon.com/512/847/847969.png',
-      credits: currentCredits,
-      isNewUser: false
-    };
-    setUser(guestUser);
-    setLoadingAuth(false);
   };
 
   const logout = async () => {
@@ -114,7 +92,7 @@ export const UserProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
   };
 
   return (
-    <UserContext.Provider value={{ user, login, logout, loginAsGuest, deductCredit, addCredits, loadingAuth }}>
+    <UserContext.Provider value={{ user, login, logout, deductCredit, addCredits, loadingAuth }}>
       {children}
     </UserContext.Provider>
   );

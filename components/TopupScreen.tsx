@@ -46,25 +46,11 @@ const TopupScreen: React.FC = () => {
         return;
     }
 
-    // 2. Handling Khusus Mode Tamu / Demo
-    if (user.id === 'guest_user') {
-        const confirmSimulasi = confirm("Mode Tamu Aktif: Sistem pembayaran asli dinonaktifkan. Apakah Anda ingin mensimulasikan Topup Sukses?");
-        if (confirmSimulasi) {
-            setProcessing(pkg.id);
-            // Simulasi delay network
-            setTimeout(() => {
-                addCredits(pkg.credits);
-                alert(`[DEMO] Pembayaran Berhasil! ${pkg.credits} Koin ditambahkan ke akun Tamu.`);
-                setProcessing(null);
-            }, 1500);
-        }
-        return;
-    }
-
     setProcessing(pkg.id);
 
     try {
-        // 3. Panggil Cloud Function 'createTransaction' (Hanya untuk User Asli)
+        // 2. Panggil Cloud Function 'createTransaction'
+        // Function ini akan menghubungi Midtrans API untuk mendapatkan Snap Token
         const createTransactionFn = httpsCallable(functions, 'createTransaction');
         
         const response = await createTransactionFn({
@@ -77,23 +63,25 @@ const TopupScreen: React.FC = () => {
         const data = response.data as { token: string; error?: string };
 
         if (data.error) {
-            alert(`Gagal: ${data.error}`);
+            alert(`Gagal membuat transaksi: ${data.error}`);
             setProcessing(null);
             return;
         }
 
-        // 4. Munculkan Pop-up Pembayaran (Snap)
+        // 3. Munculkan Pop-up Pembayaran (Snap)
         if (window.snap) {
             window.snap.pay(data.token, {
                 onSuccess: (result: any) => {
                     console.log("Payment Success!", result);
+                    // Catatan: Idealnya penambahan kredit dilakukan via Webhook (Backend)
+                    // Namun untuk UX instan di sisi klien, kita tambahkan sementara
                     addCredits(pkg.credits); 
                     alert(`Pembayaran Berhasil! ${pkg.credits} Koin ditambahkan.`);
                     setProcessing(null);
                 },
                 onPending: (result: any) => {
                     console.log("Payment Pending", result);
-                    alert("Menunggu pembayaran Anda...");
+                    alert("Menunggu pembayaran Anda... Saldo akan masuk otomatis setelah dibayar.");
                     setProcessing(null);
                 },
                 onError: (result: any) => {
@@ -107,22 +95,13 @@ const TopupScreen: React.FC = () => {
                 }
             });
         } else {
-            alert("Sistem pembayaran belum siap (Snap.js belum termuat). Silakan refresh halaman.");
+            alert("Sistem pembayaran belum siap (Library Midtrans Snap belum termuat). Silakan refresh halaman.");
             setProcessing(null);
         }
 
     } catch (error: any) {
         console.error("Topup Error:", error);
-        
-        // --- SIMULASI MODE (FALLBACK JIKA BACKEND ERROR) ---
-        const confirmSimulasi = confirm("Koneksi ke backend gagal (Mungkin belum dideploy). Simulasikan Topup Sukses untuk tes UI?");
-        if (confirmSimulasi) {
-             addCredits(pkg.credits);
-             alert(`[MODE TES] ${pkg.credits} Koin ditambahkan ke akun.`);
-        } else {
-             alert(`Terjadi kesalahan koneksi: ${error.message}`);
-        }
-        
+        alert(`Terjadi kesalahan koneksi ke server pembayaran. Pastikan Cloud Function sudah dideploy. Error: ${error.message}`);
         setProcessing(null);
     }
   };
@@ -139,11 +118,6 @@ const TopupScreen: React.FC = () => {
             <div className="flex items-center justify-center gap-2 text-slate-400 text-xs bg-white/5 w-fit mx-auto px-4 py-2 rounded-full backdrop-blur-md border border-white/10">
                 <ShieldCheck className="w-4 h-4 text-emerald-400" /> Payment Secured by Midtrans
             </div>
-            {user?.id === 'guest_user' && (
-                <div className="mt-4 bg-amber-500/20 text-amber-200 text-[10px] font-bold px-3 py-1 rounded-full inline-block">
-                    MODE TAMU (DEMO)
-                </div>
-            )}
         </div>
       </div>
 
