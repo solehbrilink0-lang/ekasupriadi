@@ -1,8 +1,14 @@
-import { initializeApp, getApps, getApp } from "firebase/app";
-import { getAuth, GoogleAuthProvider } from "firebase/auth";
+import * as firebaseAuth from "firebase/auth";
 import { getFirestore } from "firebase/firestore";
 import { getFunctions } from "firebase/functions";
-import { getAnalytics, isSupported } from "firebase/analytics";
+import * as firebaseApp from "firebase/app";
+import * as firebaseAnalytics from "firebase/analytics";
+
+// Workaround for TypeScript errors where modules are reported as having no exported members
+// due to conflicting type definitions (e.g. between @types/firebase and firebase v9+)
+const { initializeApp, getApps, getApp } = firebaseApp as any;
+const { getAnalytics, isSupported } = firebaseAnalytics as any;
+const { getAuth, GoogleAuthProvider } = firebaseAuth as any;
 
 // Konfigurasi sesuai dengan snippet dari Firebase Console Anda
 export const firebaseConfig = {
@@ -25,13 +31,16 @@ export const functions = getFunctions(app, 'us-central1');
 export const googleProvider = new GoogleAuthProvider();
 
 // Initialize Analytics (Browser only)
-let analytics;
+let analytics: any;
 if (typeof window !== 'undefined') {
-  isSupported().then((supported) => {
-    if (supported) {
-      analytics = getAnalytics(app);
-    }
-  }).catch(console.error);
+  // Check if isSupported is available (it returns a promise)
+  if (isSupported) {
+    isSupported().then((supported: boolean) => {
+      if (supported) {
+        analytics = getAnalytics(app);
+      }
+    }).catch(console.error);
+  }
 }
 
 export { analytics };

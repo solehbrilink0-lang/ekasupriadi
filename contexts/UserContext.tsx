@@ -1,7 +1,9 @@
 import React, { createContext, useContext, useState, useEffect, ReactNode } from 'react';
 import { User } from '../types';
 import { auth, googleProvider } from '../firebaseConfig';
-import { signInWithPopup, signOut, onAuthStateChanged, User as FirebaseUser } from 'firebase/auth';
+import * as firebaseAuth from 'firebase/auth';
+
+const { signInWithPopup, signOut, onAuthStateChanged } = firebaseAuth as any;
 
 interface UserContextType {
   user: User | null;
@@ -30,7 +32,7 @@ export const UserProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
 
   useEffect(() => {
     // Listener status login Firebase
-    const unsubscribe = onAuthStateChanged(auth, (firebaseUser) => {
+    const unsubscribe = onAuthStateChanged(auth, (firebaseUser: any) => {
       if (firebaseUser) {
         const currentCredits = getStoredCredits(firebaseUser.uid);
         

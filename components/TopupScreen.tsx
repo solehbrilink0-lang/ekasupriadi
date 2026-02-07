@@ -115,8 +115,10 @@ const TopupScreen: React.FC = () => {
         <div className="relative z-10">
             <p className="text-indigo-300 text-xs font-black uppercase tracking-[0.3em] mb-4">Saldo Koin Aktif</p>
             <div className="text-6xl md:text-8xl font-black mb-4 tracking-tighter">{user?.credits}</div>
-            <div className="flex items-center justify-center gap-2 text-slate-400 text-xs bg-white/5 w-fit mx-auto px-4 py-2 rounded-full backdrop-blur-md border border-white/10">
-                <ShieldCheck className="w-4 h-4 text-emerald-400" /> Payment Secured by Midtrans
+            <div className="flex flex-col items-center gap-2">
+                <div className="flex items-center justify-center gap-2 text-slate-400 text-xs bg-white/5 w-fit px-4 py-2 rounded-full backdrop-blur-md border border-white/10">
+                    <ShieldCheck className="w-4 h-4 text-emerald-400" /> Payment Secured by Midtrans
+                </div>
             </div>
         </div>
       </div>
