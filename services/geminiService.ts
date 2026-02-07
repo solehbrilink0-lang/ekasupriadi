@@ -1,20 +1,53 @@
+
 import { GoogleGenAI, Type } from "@google/genai";
+import { FinancialReport } from "../types";
 
 const ai = new GoogleGenAI({ apiKey: process.env.API_KEY });
+
+// Helper untuk mendapatkan waktu Indonesia terkini
+const getCurrentDateTime = () => {
+  return new Date().toLocaleString('id-ID', { 
+    timeZone: 'Asia/Jakarta', 
+    dateStyle: 'full', 
+    timeStyle: 'short' 
+  });
+};
 
 export interface AnalysisResult {
   text: string;
   sources: Array<{ title: string; uri: string }>;
 }
 
+export interface AdStrategyResult {
+  breakEvenRoas: number;
+  recommendedTargetRoas: number;
+  biddingStrategy: string;
+  dailyBudgetRecommendation: number;
+  targetAudienceKeywords: string[];
+  explanation: string;
+}
+
 export interface ShopData {
   shopName: string;
   productType: string;
-  dailyCapacity: string; // Changed from productCount
+  dailyCapacity: string; 
   stockCapacity: string;
   profitMargin: string;
   marketplace: string;
-  shopStatus: 'NEW' | 'ESTABLISHED'; // New field
+  shopStatus: 'NEW' | 'ESTABLISHED';
+  sellingPrice?: number;
+  netProfit?: number;
+}
+
+export interface TrendingProduct {
+  name: string;
+  category: string;
+  status: string;
+}
+
+export interface MarketplaceTrend {
+  platform: string;
+  items: TrendingProduct[];
 }
 
 export interface DailyInsightResult {
@@ -23,32 +56,138 @@ export interface DailyInsightResult {
   marketMood: 'FIRE' | 'SLOW' | 'NORMAL';
   trendingCategories: string[];
   actionItem: string;
+  marketplaceTrends: MarketplaceTrend[];
+  sources?: Array<{ title: string; uri: string }>;
 }
 
-// --- NEW FUNCTION: Daily Dashboard Insight ---
+export const analyzeFinancialHealth = async (report: FinancialReport): Promise<string> => {
+  try {
+    const prompt = `
+      CONTEXT: Waktu sekarang adalah ${getCurrentDateTime()}.
+      PERAN: Anda adalah CFO berpengalaman untuk UKM Marketplace Indonesia.
+      DATA: Omset Rp ${report.totalRevenue.toLocaleString('id-ID')}, Profit Rp ${report.finalNetProfit.toLocaleString('id-ID')}.
+      Analisa kesehatan keuangan dan berikan saran strategis dalam 3 poin. 
+      Pertimbangkan faktor tanggal saat ini (misal: apakah ini musim gajian atau persiapan kampanye besar).
+    `;
+    const response = await ai.models.generateContent({
+      model: 'gemini-3-pro-preview',
+      contents: prompt
+    });
+    return response.text || "Gagal analisa.";
+  } catch (error) {
+    return "AI sedang sibuk menganalisa data Anda.";
+  }
+};
+
 export const getDailyInsight = async (): Promise<DailyInsightResult> => {
   try {
-    const today = new Date();
-    const dateString = today.toLocaleDateString('id-ID', { weekday: 'long', day: 'numeric', month: 'long', year: 'numeric' });
-    
     const prompt = `
-      Hari ini adalah: ${dateString}.
+      DATA TERBARU: Hari ini adalah ${getCurrentDateTime()}.
+      TUGAS: Analisa tren marketplace Indonesia (Shopee, TikTok Shop, Tokopedia, Lazada) HARI INI.
+      1. Tentukan Mood Pasar (FIRE/NORMAL/SLOW).
+      2. Berikan Headline singkat & Strategi.
+      3. List 3 produk/kategori spesifik yang sedang trending/viral di masing-masing platform (Shopee, TikTok, Tokopedia, Lazada).
       
-      Peran: Anda adalah AI Business Intelligence untuk E-commerce Indonesia (Shopee, TikTok, Tokopedia).
-      Tugas: Analisa tanggal hari ini dan berikan insight singkat untuk seller.
+      KEEP IT CONCISE. Output must be valid JSON matching the schema. Do not generate massive text.
+    `;
+    
+    const response = await ai.models.generateContent({
+      model: 'gemini-3-flash-preview',
+      contents: prompt,
+      config: {
+        tools: [{ googleSearch: {} }],
+        responseMimeType: "application/json",
+        responseSchema: {
+          type: Type.OBJECT,
+          properties: {
+            headline: { type: Type.STRING },
+            strategy: { type: Type.STRING },
+            marketMood: { type: Type.STRING, enum: ["FIRE", "SLOW", "NORMAL"] },
+            trendingCategories: { type: Type.ARRAY, items: { type: Type.STRING } },
+            actionItem: { type: Type.STRING },
+            marketplaceTrends: {
+              type: Type.ARRAY,
+              items: {
+                type: Type.OBJECT,
+                properties: {
+                  platform: { type: Type.STRING, description: "Shopee, TikTok, Tokopedia, or Lazada" },
+                  items: {
+                    type: Type.ARRAY,
+                    items: {
+                      type: Type.OBJECT,
+                      properties: {
+                        name: { type: Type.STRING, description: "Product name" },
+                        category: { type: Type.STRING },
+                        status: { type: Type.STRING, description: "Viral/Naik Daun" }
+                      }
+                    }
+                  }
+                }
+              }
+            }
+          },
+          required: ["headline", "strategy", "marketMood", "marketplaceTrends", "actionItem"]
+        }
+      }
+    });
+
+    let jsonText = response.text || "{}";
+    // Sanitize to remove potential Markdown wrappers (common in LLM output)
+    jsonText = jsonText.replace(/```json/g, "").replace(/```/g, "").trim();
+
+    const result = JSON.parse(jsonText);
+    
+    // Ekstrak sumber berita jika tersedia
+    const sources = response.candidates?.[0]?.groundingMetadata?.groundingChunks?.map((chunk: any) => ({
+      title: chunk.web?.title || "Sumber Berita",
+      uri: chunk.web?.uri || ""
+    })).filter((s: any) => s.uri !== "") || [];
+
+    return { ...result, sources };
+  } catch (error) {
+    console.error("Daily Insight Error:", error);
+    // Return fallback data silently instead of throwing to prevent UI crash
+    return { 
+      headline: "Optimalkan Penjualan Anda!", 
+      strategy: "Tetap pantau stok dan performa iklan di hari ini.", 
+      marketMood: "NORMAL", 
+      trendingCategories: ["Umum"], 
+      actionItem: "Cek laporan harian sekarang.",
+      marketplaceTrends: []
+    };
+  }
+};
+
+export const generateAdStrategy = async (
+  productName: string,
+  marketplace: string,
+  sellingPrice: number,
+  profitPerItem: number
+): Promise<AdStrategyResult> => {
+  try {
+    // 1. Kalkulasi Matematika Pasti (Rule: Rekomendasi = 3x BEP)
+    // BEP = Harga Jual / Profit
+    const breakEvenRoas = sellingPrice / profitPerItem;
+    const recommendedTargetRoas = breakEvenRoas * 3;
+    const margin = (profitPerItem / sellingPrice) * 100;
+
+    const prompt = `
+      ROLE: Digital Ads Expert untuk Marketplace Indonesia (Shopee Ads, TikTok Ads, Tokopedia Ads).
+      PRODUK: "${productName}" di ${marketplace}.
+      DATA: Harga Jual Rp ${sellingPrice}, Profit Rp ${profitPerItem} (Margin ${margin.toFixed(1)}%).
       
-      Konteks Analisa:
-      1. Apakah ini Tanggal Kembar (misal 9.9, 12.12)? -> Mood: FIRE
-      2. Apakah ini Periode Gajian (Payday, tgl 25 - 5)? -> Mood: FIRE
-      3. Apakah ini Akhir Pekan (Sabtu/Minggu)? -> Mood: SLOW (biasanya orang liburan/kurang buka HP untuk belanja barang serius, tapi bagus untuk barang hobi)
-      4. Apakah ini Tanggal Tua (tgl 15-24)? -> Mood: SLOW/NORMAL
+      ATURAN KALKULASI:
+      - Break Even ROAS (BEP): ${breakEvenRoas.toFixed(2)} (Titik impas modal)
+      - Recommended Target ROAS: ${recommendedTargetRoas.toFixed(2)} (Strategi Profit Aman 3x Lipat BEP)
       
-      Output JSON:
-      - headline: Satu kalimat penyemangat singkat relevan dengan tanggal.
-      - strategy: 2-3 kalimat saran strategis apa yang harus dilakukan seller HARI INI.
-      - marketMood: Pilih antara 'FIRE' (Sangat Ramai), 'NORMAL', atau 'SLOW' (Sepi).
-      - trendingCategories: List 3 kategori produk yang potensial laku di tanggal/hari ini.
-      - actionItem: Satu tugas konkret 1 kalimat.
+      TUGAS:
+      Berikan strategi iklan lengkap berdasarkan angka target ROAS ${recommendedTargetRoas.toFixed(2)} tersebut.
+      1. Tentukan strategi bidding yang cocok (misal: "Maximize GMV" atau "Maximize Profit" atau "Manual CPC").
+      2. Rekomendasi budget harian awal yang masuk akal.
+      3. Keyword/Audience targeting spesifik untuk produk ini.
+      4. Penjelasan singkat: Mengapa kita set target ROAS di angka ${recommendedTargetRoas.toFixed(2)}? (Jelaskan bahwa ini 3x lipat dari titik impas untuk menjamin profitabilitas tinggi dan menutupi resiko biaya tak terduga).
+      
+      Output JSON Only.
     `;
 
     const response = await ai.models.generateContent({
@@ -59,145 +198,105 @@ export const getDailyInsight = async (): Promise<DailyInsightResult> => {
         responseSchema: {
           type: Type.OBJECT,
           properties: {
-            headline: { type: Type.STRING },
-            strategy: { type: Type.STRING },
-            marketMood: { type: Type.STRING, enum: ["FIRE", "SLOW", "NORMAL"] },
-            trendingCategories: { 
-              type: Type.ARRAY, 
-              items: { type: Type.STRING } 
-            },
-            actionItem: { type: Type.STRING }
+            // Kita tidak minta AI hitung angka lagi agar konsisten, tapi kita minta field lain
+            biddingStrategy: { type: Type.STRING, description: "Growth atau Profit" },
+            dailyBudgetRecommendation: { type: Type.NUMBER },
+            targetAudienceKeywords: { type: Type.ARRAY, items: { type: Type.STRING } },
+            explanation: { type: Type.STRING, description: "Alasan strategi dalam bahasa Indonesia" }
           },
-          required: ["headline", "strategy", "marketMood", "trendingCategories", "actionItem"]
+          required: ["biddingStrategy", "dailyBudgetRecommendation", "targetAudienceKeywords", "explanation"]
         }
       }
     });
 
-    return JSON.parse(response.text || "{}");
-  } catch (error) {
-    console.error("Daily Insight Error:", error);
-    // Fallback data if AI fails
+    const aiResult = JSON.parse(response.text || "{}");
+
+    // Gabungkan hasil kalkulasi pasti dengan saran kualitatif AI
     return {
-      headline: "Tetap Semangat Berjualan!",
-      strategy: "Cek stok dan pastikan chat terbalas dengan cepat. Konsistensi adalah kunci.",
-      marketMood: "NORMAL",
-      trendingCategories: ["Fashion", "Kebutuhan Rumah", "Makanan"],
-      actionItem: "Upload 1 produk baru atau update foto produk lama."
+        breakEvenRoas,
+        recommendedTargetRoas, // Pastikan angka ini yang dipakai (3x BEP)
+        biddingStrategy: aiResult.biddingStrategy || "Standard Growth",
+        dailyBudgetRecommendation: aiResult.dailyBudgetRecommendation || 25000,
+        targetAudienceKeywords: aiResult.targetAudienceKeywords || [productName],
+        explanation: aiResult.explanation || `Target ROAS diset ${recommendedTargetRoas.toFixed(1)}x (3 kali lipat dari titik impas) untuk memastikan setiap penjualan iklan menghasilkan profit bersih yang signifikan dan aman.`
+    };
+
+  } catch (error) {
+    console.error("Ad Strategy Error:", error);
+    // Fallback logic jika AI gagal
+    const bep = sellingPrice / profitPerItem;
+    return {
+        breakEvenRoas: bep,
+        recommendedTargetRoas: bep * 3,
+        biddingStrategy: "Manual CPC / Standard",
+        dailyBudgetRecommendation: 50000,
+        targetAudienceKeywords: [productName, "Promo Murah", "Terlaris"],
+        explanation: "AI sedang sibuk. Rekomendasi dihitung berdasarkan rumus 3x Profit Margin untuk keamanan budget."
     };
   }
 };
 
-export const analyzeCompetitorOrShop = async (
-  context: string, 
-  marketplace: string
-): Promise<string> => {
+export const analyzeShopStrategy = async (data: ShopData, imageBase64: string | null, mimeType: string | null): Promise<AnalysisResult> => {
   try {
     const prompt = `
-      Anda adalah konsultan E-commerce expert untuk pasar Indonesia (khususnya ${marketplace}).
-      User adalah penjual yang membutuhkan analisa mendalam.
-      Konteks: "${context}"
-      Berikan jawaban taktis, actionable, dan profesional.
-    `;
-
-    const response = await ai.models.generateContent({
-      model: 'gemini-3-flash-preview',
-      contents: prompt
-    });
-
-    return response.text || "Maaf, tidak dapat menghasilkan analisa saat ini.";
-  } catch (error) {
-    console.error("Gemini Analysis Error:", error);
-    return "Terjadi kesalahan saat menghubungi AI Consultant. Mohon coba lagi nanti.";
-  }
-};
-
-export const analyzeShopStrategy = async (
-  data: ShopData,
-  imageBase64: string | null,
-  mimeType: string | null
-): Promise<AnalysisResult> => {
-  try {
-    const statusText = data.shopStatus === 'NEW' 
-      ? "Toko Baru Buka (Belum ada rating/penjualan signifikan)" 
-      : "Toko Sudah Berjalan (Sudah ada reputasi/rating)";
-
-    const prompt = `
-      PERAN: Anda adalah Senior Business Consultant & E-commerce Strategist untuk Marketplace Indonesia.
-      
-      DATA KLIEN:
+      BERTINDAK SEBAGAI: Marketplace Business Expert Indonesia.
+      WAKTU SEKARANG: ${getCurrentDateTime()}.
+      DATA TOKO:
       - Nama Toko: "${data.shopName}"
-      - Status Toko: ${statusText}
-      - Jenis Produk: "${data.productType}"
-      - Kapasitas Kirim Harian: ${data.dailyCapacity} paket/hari (Operasional)
-      - Total Stok Tersedia: ${data.stockCapacity} pcs
-      - Target Margin Keuntungan: ${data.profitMargin}%
-      - Target Marketplace: ${data.marketplace}
-
-      TUGAS: Berikan analisa strategis mendalam berdasarkan data di atas (khususnya status toko dan kapasitas operasional) serta gambar produk (jika ada).
+      - Kategori: "${data.productType}"
+      - Marketplace: ${data.marketplace}
+      - Harga Jual: Rp ${data.sellingPrice?.toLocaleString('id-ID')}
+      - Profit Bersih: Rp ${data.netProfit?.toLocaleString('id-ID')}
       
-      FORMAT LAPORAN (Markdown):
-      
-      1. **Analisa Branding & Identitas** 🏪
-         - Apakah nama "${data.shopName}" cocok untuk kategori "${data.productType}"?
-         - KHUSUS ${data.shopStatus === 'NEW' ? 'TOKO BARU' : 'TOKO LAMA'}: Berikan strategi branding yang sesuai. 
-           (Jika Baru: Fokus membangun Trust & First Impression. Jika Lama: Fokus pada Retensi & Dominasi).
-
-      2. **Bedah Produk & Visual** 📦
-         - (Analisa Gambar): Review kualitas foto. Apakah cukup menarik untuk scroll-stopper?
-         - Market Fit: Apakah produk ini cocok untuk strategi "Volume Besar Margin Tipis" atau "Premium Margin Tebal"?
-
-      3. **Strategi Penjualan di ${data.marketplace}** 🚀
-         - Karena toko ini **${statusText}**, apa fitur ${data.marketplace} yang WAJIB dimaksimalkan minggu ini?
-         - Strategi Operasional: Dengan kapasitas kirim **${data.dailyCapacity} paket/hari**, bagaimana mengatur flow order agar tidak overload atau justru kekurangan order?
-         - Jika kapasitas kirim kecil tapi stok banyak: Sarankan cara mempercepat packing.
-         - Jika kapasitas kirim besar: Sarankan cara scale-up traffic (Iklan/Live).
-
-      4. **Analisa Keuntungan & Penetapan Harga** 💰
-         - Margin ${data.profitMargin}% apakah realistis untuk status toko ini?
-         - (Tips: Toko baru biasanya perlu penetrasi harga, Toko lama bisa main harga normal).
-         - Ingatkan user untuk menggunakan fitur "Kalkulator Harga" di aplikasi ini untuk memastikan tidak rugi kena admin fee.
-
-      5. **Action Plan Minggu Ini** ✅
-         - 3 langkah konkret yang harus dilakukan penjual sekarang juga.
+      TUGAS:
+      1. Gunakan konteks tanggal sekarang untuk memberikan saran musiman (misal: jika mendekati Lebaran, sarankan produk hampers).
+      2. Jika ada gambar, analisa kualitas visual produk (branding, pencahayaan, kemasan).
+      3. Berikan analisa "Price-to-Value": Apakah harga Rp ${data.sellingPrice} kompetitif di pasar saat ini?
+      4. Berikan 3 langkah konkret strategi marketing yang relevan dengan tren hari ini.
     `;
-
-    const parts: any[] = [{ text: prompt }];
     
-    // Add image if provided
+    const parts: any[] = [{ text: prompt }];
     if (imageBase64 && mimeType) {
       parts.push({
         inlineData: {
-          mimeType: mimeType,
+          mimeType,
           data: imageBase64
         }
       });
     }
 
     const response = await ai.models.generateContent({
-      model: 'gemini-3-flash-preview',
-      contents: {
-        parts: parts
-      }
+      model: 'gemini-3-pro-preview',
+      contents: { parts }
     });
-
-    return {
-      text: response.text || "Analisa selesai, namun tidak ada output teks.",
+    
+    return { 
+      text: response.text || "Analisa selesai.", 
       sources: [] 
     };
+  } catch (error) {
+    console.error(error);
+    throw new Error("Gagal analisa strategi.");
+  }
+};
 
-  } catch (error: any) {
-    console.error("Shop Strategy Analysis Error:", error);
-    
-    const errorDetail = error.message || error.toString();
-    const errString = errorDetail.toLowerCase();
-
-    if (errString.includes("429")) {
-        throw new Error("Kuota AI penuh. Mohon tunggu 1 menit.");
-    } else if (errString.includes("503")) {
-        throw new Error("Server AI sedang sibuk.");
+const generateImageVariant = async (base64Image: string, mimeType: string, promptText: string): Promise<string | null> => {
+  try {
+    const response = await ai.models.generateContent({
+      model: 'gemini-2.5-flash-image',
+      contents: {
+        parts: [
+          { inlineData: { data: base64Image, mimeType } },
+          { text: promptText }
+        ]
+      }
+    });
+    for (const part of response.candidates?.[0]?.content?.parts || []) {
+      if (part.inlineData) return `data:image/png;base64,${part.inlineData.data}`;
     }
-
-    throw new Error(`Gagal menganalisa strategi: ${errorDetail.substring(0, 100)}...`);
+    return null;
+  } catch (error) {
+    return null;
   }
 };
 
@@ -205,45 +304,72 @@ export const generateProductListing = async (
   imageBase64: string,
   mimeType: string,
   productName: string,
-  marketplace: string
+  marketplace: string,
+  sellingPrice: number,
+  profitPerItem: number
 ) => {
   try {
-    const prompt = `
-      Anda adalah ahli Copywriting dan SEO Marketplace Indonesia (${marketplace}).
-      Tugas: Buat konten produk yang sangat menjual berdasarkan gambar dan nama produk: "${productName}".
-      
-      Aturan:
-      1. Judul SEO: Harus mengandung kata kunci pencarian tinggi, bombastis tapi relevan, format marketplace (Merek - Nama Produk - Kata Kunci - Fitur).
-      2. Deskripsi: Gunakan copywriting AIDA (Attention, Interest, Desire, Action), gunakan emoji yang menarik, poin-poin keunggulan (USP), dan spesifikasi teknis jika terlihat.
-      3. Strategi Diskon: Analisa jenis barangnya, lalu sarankan strategi diskon (misal: bundling, harga coret psikologis, atau flash sale) dan berapa persen diskon yang wajar untuk menarik pembeli tanpa merusak harga pasar.
+    const textPrompt = `
+      BERTINDAK SEBAGAI: Marketplace Marketing Expert Indonesia.
+      WAKTU SEKARANG: ${getCurrentDateTime()}.
+      PRODUK: "${productName}" di ${marketplace}.
+      DATA: Harga Jual Rp ${sellingPrice}, Profit per item Rp ${profitPerItem}.
+      TUGAS: 
+      1. Buat Judul SEO yang menyertakan keyword tren musiman jika ada (misal: "Promo Akhir Tahun").
+      2. Buat Deskripsi SEO menarik.
+      3. Hitung Target ROAS dan Rekomendasi Budget.
+      OUTPUT: Harus valid JSON.
     `;
-
-    const response = await ai.models.generateContent({
-      model: 'gemini-3-flash-preview',
+    
+    const textResponse = await ai.models.generateContent({
+      model: 'gemini-3-pro-preview',
       contents: {
-        parts: [
-          { inlineData: { mimeType, data: imageBase64 } },
-          { text: prompt }
-        ]
+        parts: [{ inlineData: { mimeType, data: imageBase64 } }, { text: textPrompt }]
       },
       config: {
         responseMimeType: "application/json",
         responseSchema: {
           type: Type.OBJECT,
           properties: {
-            seoTitle: { type: Type.STRING, description: "Judul produk optimasi SEO" },
-            seoDescription: { type: Type.STRING, description: "Deskripsi produk lengkap dengan emoji dan poin-poin" },
-            discountStrategy: { type: Type.STRING, description: "Penjelasan strategi diskon yang disarankan" },
-            suggestedDiscountPercentage: { type: Type.INTEGER, description: "Angka saran diskon (0-100)" }
+            seoTitle: { type: Type.STRING },
+            seoDescription: { type: Type.STRING },
+            discountStrategy: { type: Type.STRING },
+            suggestedDiscountPercentage: { type: Type.INTEGER },
+            adsStrategy: {
+               type: Type.OBJECT,
+               properties: {
+                  targetRoas: { type: Type.NUMBER },
+                  dailyBudgetRecommendation: { type: Type.INTEGER },
+                  audienceTargeting: { type: Type.STRING }
+               },
+               required: ["targetRoas", "dailyBudgetRecommendation", "audienceTargeting"]
+            }
           },
-          required: ["seoTitle", "seoDescription", "discountStrategy", "suggestedDiscountPercentage"]
+          required: ["seoTitle", "seoDescription", "discountStrategy", "suggestedDiscountPercentage", "adsStrategy"]
         }
       }
     });
 
-    return JSON.parse(response.text || "{}");
+    const textResult = JSON.parse(textResponse.text || "{}");
+    const generatedImages: string[] = [];
+    
+    // Generate 2 varian saja untuk efisiensi kecepatan
+    const imagePrompts = [
+      `Professional e-commerce product photography, high resolution, soft lighting`,
+      `Product lifestyle shot in Indonesian home setting, warm natural lighting`
+    ];
+
+    for (const p of imagePrompts) {
+        const img = await generateImageVariant(imageBase64, mimeType, p);
+        if (img) generatedImages.push(img);
+        await new Promise(r => setTimeout(r, 300));
+    }
+
+    if (generatedImages.length === 0) generatedImages.push(`data:${mimeType};base64,${imageBase64}`);
+
+    return { ...textResult, generatedImages };
   } catch (error) {
-    console.error("Gemini Product Gen Error:", error);
-    throw new Error("Gagal membuat konten produk.");
+    console.error(error);
+    throw new Error("Gagal memproses Magic AI.");
   }
 };

@@ -1,5 +1,7 @@
 {
   "name": "SellerPintar - Solusi Cuan Seller",
-  "description": "Aplikasi kalkulator pintar untuk seller marketplace Indonesia (Shopee, TikTok, Lazada) menghitung harga jual, margin, ROAS iklan, dan analisa kompetitor berbasis AI.",
-  "requestFramePermissions": []
+  "description": "Aplikasi kalkulator pintar untuk seller marketplace Indonesia menghitung harga jual, margin, ROAS iklan, dan analisa AI.",
+  "requestFramePermissions": [
+    "camera"
+  ]
 }

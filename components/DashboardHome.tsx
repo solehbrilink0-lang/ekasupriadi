@@ -1,154 +1,202 @@
+
 import React, { useEffect, useState } from 'react';
 import { getDailyInsight, DailyInsightResult } from '../services/geminiService';
-import { Calendar, TrendingUp, Zap, Clock, ChevronRight, BarChart3, AlertTriangle, CloudSun } from 'lucide-react';
+import { Zap, Clock, BarChart3, TrendingUp, Sparkles, Layout, Coins, ExternalLink, ArrowRight, ShoppingBag, Flame } from 'lucide-react';
 
 const DashboardHome: React.FC<{ onChangeMode: (mode: any) => void }> = ({ onChangeMode }) => {
   const [insight, setInsight] = useState<DailyInsightResult | null>(null);
   const [loading, setLoading] = useState(true);
-  const [currentDate, setCurrentDate] = useState(new Date());
 
   useEffect(() => {
-    // Timer untuk jam
-    const timer = setInterval(() => setCurrentDate(new Date()), 60000);
-    
-    // Fetch AI Insight
-    const fetchInsight = async () => {
-      try {
-        const data = await getDailyInsight();
-        setInsight(data);
-      } catch (e) {
-        console.error(e);
-      } finally {
-        setLoading(false);
-      }
-    };
-
-    fetchInsight();
-    return () => clearInterval(timer);
+    const timer = setTimeout(() => {
+      getDailyInsight()
+        .then(setInsight)
+        .catch(console.error)
+        .finally(() => setLoading(false));
+    }, 100);
+    return () => clearTimeout(timer);
   }, []);
 
-  const dateOptions: Intl.DateTimeFormatOptions = { weekday: 'long', day: 'numeric', month: 'long', year: 'numeric' };
-  const dateString = currentDate.toLocaleDateString('id-ID', dateOptions);
+  const getPlatformStyle = (platform: string) => {
+    const p = platform.toLowerCase();
+    if (p.includes('shopee')) return 'bg-orange-50 border-orange-200 text-orange-700 hover:bg-orange-100';
+    if (p.includes('tiktok')) return 'bg-slate-900 border-slate-700 text-white hover:bg-slate-800';
+    if (p.includes('tokopedia')) return 'bg-emerald-50 border-emerald-200 text-emerald-700 hover:bg-emerald-100';
+    if (p.includes('lazada')) return 'bg-blue-50 border-blue-200 text-blue-700 hover:bg-blue-100';
+    return 'bg-slate-50 border-slate-200 text-slate-700 hover:bg-slate-100';
+  };
 
   return (
-    <div className="space-y-6">
+    <div className="space-y-8">
       
-      {/* 1. Date & Time Hero */}
-      <div className="bg-white rounded-[2rem] p-6 shadow-sm border border-slate-100 flex justify-between items-center relative overflow-hidden">
-        <div className="relative z-10">
-          <p className="text-slate-500 font-bold text-xs uppercase tracking-wider mb-1">Hari Ini</p>
-          <h2 className="text-xl font-black text-slate-800 leading-tight">{dateString}</h2>
-        </div>
-        <div className="relative z-10 bg-indigo-50 p-3 rounded-2xl">
-          <Calendar className="w-8 h-8 text-indigo-600" />
-        </div>
-        
-        {/* Decorative BG */}
-        <div className="absolute -right-6 -bottom-6 w-24 h-24 bg-gradient-to-br from-indigo-100 to-violet-100 rounded-full blur-2xl opacity-50"></div>
-      </div>
-
-      {/* 2. AI Daily Insight Card */}
-      <div className="bg-gradient-to-br from-slate-900 to-slate-800 rounded-[2.5rem] p-6 text-white shadow-xl shadow-slate-200 relative overflow-hidden animate-fade-up">
-        {loading ? (
-          <div className="flex flex-col items-center justify-center py-10 space-y-3">
-             <div className="w-8 h-8 border-4 border-white/20 border-t-white rounded-full animate-spin"></div>
-             <p className="text-xs text-white/60 animate-pulse">AI sedang membaca kalender...</p>
-          </div>
-        ) : insight ? (
-          <div className="relative z-10">
-             <div className="flex justify-between items-start mb-4">
-                <span className="bg-white/10 backdrop-blur-md px-3 py-1 rounded-full text-[10px] font-bold uppercase tracking-wider border border-white/10 flex items-center gap-1">
-                  <Zap className="w-3 h-3 text-yellow-400" /> Daily Insight
-                </span>
-                
-                {/* Mood Badge */}
-                <span className={`px-3 py-1 rounded-full text-[10px] font-bold uppercase flex items-center gap-1 ${
-                  insight.marketMood === 'FIRE' ? 'bg-rose-500 text-white shadow-lg shadow-rose-500/30' : 
-                  insight.marketMood === 'SLOW' ? 'bg-slate-600 text-slate-200' : 'bg-blue-500 text-white'
-                }`}>
-                   {insight.marketMood === 'FIRE' ? '🔥 Traffic Tinggi' : 
-                    insight.marketMood === 'SLOW' ? '❄️ Traffic Santai' : '🛒 Traffic Normal'}
-                </span>
-             </div>
-
-             <h3 className="text-lg font-bold mb-2 leading-snug">{insight.headline}</h3>
-             <p className="text-sm text-slate-300 mb-6 leading-relaxed border-l-2 border-indigo-500 pl-3">
-               "{insight.strategy}"
-             </p>
-
-             <div className="bg-white/5 rounded-xl p-4 border border-white/10 backdrop-blur-sm">
-               <div className="flex items-center gap-2 mb-2 text-yellow-400 font-bold text-xs uppercase">
-                 <Clock className="w-3 h-3" /> Tugas Hari Ini
-               </div>
-               <p className="text-sm font-medium">{insight.actionItem}</p>
-             </div>
-          </div>
-        ) : (
-          <div className="py-8 text-center text-white/50">Gagal memuat insight.</div>
-        )}
-
-        {/* Decorative Orbs */}
-        <div className="absolute top-0 right-0 w-64 h-64 bg-indigo-500/20 rounded-full blur-3xl -translate-y-1/2 translate-x-1/2"></div>
-        <div className="absolute bottom-0 left-0 w-40 h-40 bg-pink-500/20 rounded-full blur-3xl translate-y-1/2 -translate-x-1/2"></div>
-      </div>
-
-      {/* 3. Trending & Quick Stats */}
-      <div className="grid grid-cols-2 gap-4">
-         {/* Trending Categories */}
-         <div className="bg-white p-5 rounded-[2rem] border border-slate-100 shadow-sm flex flex-col justify-between">
-            <div className="mb-3">
-               <div className="w-10 h-10 bg-orange-50 rounded-full flex items-center justify-center mb-2">
-                 <TrendingUp className="w-5 h-5 text-orange-500" />
-               </div>
-               <h4 className="font-bold text-slate-700 text-sm">Produk Laris</h4>
-               <p className="text-[10px] text-slate-400">Prediksi hari ini</p>
-            </div>
-            
-            {loading ? (
-              <div className="space-y-2">
-                <div className="h-2 bg-slate-100 rounded w-full animate-pulse"></div>
-                <div className="h-2 bg-slate-100 rounded w-3/4 animate-pulse"></div>
-              </div>
-            ) : (
-              <ul className="space-y-1">
-                 {insight?.trendingCategories.slice(0, 3).map((cat, idx) => (
-                   <li key={idx} className="text-xs font-medium text-slate-600 flex items-center gap-1.5">
-                     <div className="w-1 h-1 rounded-full bg-orange-400"></div> {cat}
-                   </li>
-                 ))}
-              </ul>
-            )}
-         </div>
-
-         {/* Quick Action: Price Calc */}
-         <div 
-           onClick={() => onChangeMode('pricing')}
-           className="bg-indigo-600 p-5 rounded-[2rem] shadow-lg shadow-indigo-200 flex flex-col justify-between cursor-pointer hover:bg-indigo-700 transition-colors relative overflow-hidden group"
-         >
-            <div className="relative z-10">
-               <div className="w-10 h-10 bg-white/20 rounded-full flex items-center justify-center mb-2 backdrop-blur-sm">
-                 <BarChart3 className="w-5 h-5 text-white" />
-               </div>
-               <h4 className="font-bold text-white text-sm">Cek Profit</h4>
-               <p className="text-[10px] text-indigo-200 group-hover:text-white transition-colors">Hitung margin & admin fee</p>
-            </div>
-            <div className="absolute right-3 bottom-3 opacity-0 group-hover:opacity-100 transition-opacity transform translate-x-2 group-hover:translate-x-0">
-               <ChevronRight className="w-5 h-5 text-white" />
-            </div>
-            {/* Decoration */}
-            <div className="absolute -right-4 -top-4 w-20 h-20 bg-white/10 rounded-full blur-xl"></div>
-         </div>
-      </div>
-      
-      {/* 4. Alert / Info */}
-      <div className="bg-blue-50 rounded-xl p-4 flex items-start gap-3 border border-blue-100">
-         <CloudSun className="w-5 h-5 text-blue-500 shrink-0 mt-0.5" />
-         <div>
-            <h5 className="text-xs font-bold text-blue-800 mb-1">Info Cuaca Pasar</h5>
-            <p className="text-xs text-blue-600 leading-relaxed">
-               Data menunjukkan penjualan biasanya memuncak pada pukul 19:00 - 21:00 WIB. Siapkan CS Anda di jam tersebut!
+      {/* Intro Section */}
+      <div className="flex flex-col md:flex-row md:items-center md:justify-between gap-4">
+          <div>
+            <h4 className="text-2xl md:text-3xl font-black text-slate-800 leading-tight">Selamat Datang, Juragan! 👋</h4>
+            <p className="text-sm text-slate-500 font-medium mt-1 max-w-lg">
+              Optimalkan penjualanmu hari ini dengan data dan AI. Jangan biarkan profit tergerus biaya admin.
             </p>
-         </div>
+          </div>
+          <div className="hidden md:block">
+             <span className="bg-white px-5 py-2.5 rounded-full border border-slate-200 text-xs font-bold text-slate-500 shadow-sm">
+               {new Date().toLocaleDateString('id-ID', { weekday: 'long', day: 'numeric', month: 'long', year: 'numeric' })}
+             </span>
+          </div>
+      </div>
+
+      <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
+        
+        {/* AI Market Insight Card - Spans 2 cols on Desktop */}
+        <div className="lg:col-span-2 bg-slate-900 rounded-[2.5rem] p-8 text-white shadow-2xl shadow-slate-300/50 relative overflow-hidden flex flex-col justify-between min-h-[300px] group transition-all duration-500 hover:shadow-indigo-900/20">
+            {loading ? (
+            <div className="flex flex-col items-center justify-center h-full gap-4">
+                <div className="w-8 h-8 border-4 border-indigo-500 border-t-transparent rounded-full animate-spin"></div>
+                <p className="text-xs font-bold text-indigo-400 uppercase tracking-widest animate-pulse">Scanning Market Mood...</p>
+            </div>
+            ) : (
+            <div className="relative z-10 animate-fade-up h-full flex flex-col">
+                <div className="flex justify-between items-start mb-6">
+                    <span className="bg-indigo-500/20 text-indigo-300 px-4 py-1.5 rounded-full text-[10px] font-black uppercase border border-indigo-500/20 flex items-center gap-2 backdrop-blur-sm">
+                        <Zap className="w-3 h-3 fill-current" /> Mood Pasar Hari Ini
+                    </span>
+                    <span className={`px-4 py-1.5 rounded-full text-[10px] font-black uppercase tracking-widest shadow-lg ${
+                        insight?.marketMood === 'FIRE' ? 'bg-rose-500 text-white shadow-rose-500/50' : 'bg-blue-500 text-white'
+                    }`}>
+                        {insight?.marketMood}
+                    </span>
+                </div>
+                
+                <div className="flex-1">
+                    <h3 className="text-2xl md:text-3xl font-black leading-tight mb-3 text-transparent bg-clip-text bg-gradient-to-br from-white to-slate-400">
+                        {insight?.headline}
+                    </h3>
+                    <p className="text-sm text-slate-300 font-medium italic mb-6 border-l-4 border-indigo-500 pl-4 py-1">
+                        "{insight?.strategy}"
+                    </p>
+                </div>
+
+                <div className="mt-auto pt-6 border-t border-white/10 flex flex-col md:flex-row gap-4 md:items-center justify-between">
+                     <div className="flex items-center gap-3">
+                        <div className="bg-indigo-600 p-2.5 rounded-xl shrink-0 shadow-lg shadow-indigo-900/50 group-hover:scale-110 transition-transform duration-300">
+                            <Clock className="w-5 h-5 text-white" />
+                        </div>
+                        <p className="text-xs font-bold leading-normal text-slate-200 max-w-sm">{insight?.actionItem}</p>
+                     </div>
+
+                    {/* Grounding Sources */}
+                    {insight?.sources && insight.sources.length > 0 && (
+                        <div className="flex flex-wrap gap-2">
+                            {insight.sources.slice(0, 2).map((src, i) => (
+                                <a 
+                                key={i} 
+                                href={src.uri} 
+                                target="_blank" 
+                                rel="noopener noreferrer"
+                                className="text-[9px] bg-white/10 hover:bg-white/20 px-3 py-1.5 rounded-lg flex items-center gap-1.5 transition-colors uppercase font-bold tracking-wider backdrop-blur-md"
+                                >
+                                <ExternalLink className="w-2.5 h-2.5" /> Sumber Info
+                                </a>
+                            ))}
+                        </div>
+                    )}
+                </div>
+            </div>
+            )}
+            <div className="absolute -right-20 -bottom-20 w-80 h-80 bg-indigo-600/20 rounded-full blur-[100px] group-hover:bg-indigo-600/30 transition-colors duration-700"></div>
+            <div className="absolute top-0 right-0 w-64 h-64 bg-violet-600/10 rounded-full blur-[80px]"></div>
+        </div>
+
+        {/* Quick Access Menu Grid */}
+        <div className="grid grid-cols-2 lg:grid-cols-1 gap-4 lg:gap-6 h-full">
+             <button onClick={() => onChangeMode('pricing')} className="bg-white p-6 rounded-[2.5rem] border border-slate-100 shadow-sm text-left active:scale-[0.98] transition-all duration-300 group hover:border-indigo-100 hover:shadow-[0_10px_40px_-10px_rgba(0,0,0,0.1)] h-full flex flex-col relative overflow-hidden">
+                <div className="w-12 h-12 bg-indigo-50 rounded-2xl flex items-center justify-center mb-4 group-hover:scale-110 transition-transform duration-300 group-hover:bg-indigo-600">
+                    <BarChart3 className="w-6 h-6 text-indigo-600 group-hover:text-white transition-colors duration-300" />
+                </div>
+                <div className="mt-auto relative z-10">
+                    <h4 className="font-black text-slate-800 text-sm md:text-base group-hover:text-indigo-700 transition-colors">Cek Profit</h4>
+                    <p className="text-[10px] text-slate-400 mt-1 font-bold uppercase tracking-tight">Kalkulator Admin Fee</p>
+                </div>
+                <ArrowRight className="w-5 h-5 text-indigo-300 ml-auto mt-2 absolute bottom-6 right-6 translate-x-10 opacity-0 group-hover:translate-x-0 group-hover:opacity-100 transition-all duration-300" />
+             </button>
+
+             <button onClick={() => onChangeMode('creator')} className="bg-gradient-to-br from-indigo-600 to-violet-700 p-6 rounded-[2.5rem] text-white shadow-xl shadow-indigo-200 active:scale-[0.98] transition-all duration-300 text-left group h-full flex flex-col relative overflow-hidden hover:shadow-indigo-300">
+                <div className="absolute top-0 right-0 w-24 h-24 bg-white/10 rounded-full -mr-8 -mt-8 blur-2xl group-hover:bg-white/20 transition-colors duration-500"></div>
+                <div className="w-12 h-12 bg-white/20 rounded-2xl flex items-center justify-center mb-4 group-hover:scale-110 transition-transform duration-300 relative z-10 backdrop-blur-sm">
+                    <Sparkles className="w-6 h-6 text-white" />
+                </div>
+                <div className="mt-auto relative z-10">
+                    <h4 className="font-black text-sm md:text-base">Magic Content</h4>
+                    <p className="text-[10px] text-indigo-200 mt-1 font-bold uppercase tracking-tight">Buat Deskripsi & Foto AI</p>
+                </div>
+             </button>
+        </div>
+
+      </div>
+
+      {/* TRENDING PRODUCTS SECTION */}
+      {insight?.marketplaceTrends && insight.marketplaceTrends.length > 0 && (
+        <div className="space-y-4 animate-fade-up">
+          <div className="flex items-center justify-between">
+             <h3 className="text-lg font-black text-slate-800 flex items-center gap-2">
+                <Flame className="w-5 h-5 text-rose-500" /> Sedang Trending
+             </h3>
+             <span className="text-[10px] font-bold text-slate-400 uppercase tracking-widest">Real-time AI Analysis</span>
+          </div>
+          
+          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
+             {insight.marketplaceTrends.map((trend, idx) => (
+               <div key={idx} className={`rounded-[2rem] p-5 border shadow-sm flex flex-col h-full transition-all duration-300 hover:shadow-md hover:-translate-y-1 ${getPlatformStyle(trend.platform)}`}>
+                  <div className="flex items-center justify-between mb-4 border-b border-current/10 pb-3">
+                     <h4 className="font-black text-sm uppercase tracking-wide">{trend.platform}</h4>
+                     <ShoppingBag className="w-4 h-4 opacity-70" />
+                  </div>
+                  
+                  <div className="space-y-4 flex-1">
+                     {trend.items.map((item, i) => (
+                        <div key={i} className="flex gap-3 items-start group/item">
+                           <span className="text-xs font-black opacity-50 mt-0.5 group-hover/item:opacity-100 transition-opacity">{i+1}.</span>
+                           <div>
+                              <p className="text-xs font-bold leading-tight group-hover/item:underline">{item.name}</p>
+                              <div className="flex items-center gap-2 mt-1">
+                                 <span className="text-[9px] opacity-70 bg-current/10 px-1.5 py-0.5 rounded font-bold uppercase">{item.category}</span>
+                                 <span className="text-[9px] opacity-70 flex items-center gap-1 font-bold">
+                                    <TrendingUp className="w-2.5 h-2.5" /> {item.status}
+                                 </span>
+                              </div>
+                           </div>
+                        </div>
+                     ))}
+                  </div>
+               </div>
+             ))}
+          </div>
+        </div>
+      )}
+
+      {/* Secondary Actions */}
+      <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+        <button onClick={() => onChangeMode('roas')} className="bg-white p-5 rounded-[2rem] border border-slate-100 flex items-center gap-4 hover:shadow-lg transition-all duration-300 group hover:border-emerald-100">
+            <div className="w-12 h-12 bg-emerald-50 rounded-2xl flex items-center justify-center text-emerald-600 group-hover:bg-emerald-600 group-hover:text-white transition-colors duration-300">
+                <TrendingUp className="w-6 h-6" />
+            </div>
+            <div className="text-left">
+                <h4 className="font-bold text-slate-800 text-sm group-hover:text-emerald-700 transition-colors">Audit Iklan</h4>
+                <p className="text-[10px] text-slate-400 font-bold uppercase">Optimasi ROAS</p>
+            </div>
+        </button>
+
+        <button onClick={() => onChangeMode('topup')} className="bg-amber-50 p-5 rounded-[2rem] border border-amber-100 flex items-center gap-4 hover:bg-amber-100 transition-all duration-300 group md:col-span-2">
+            <div className="w-12 h-12 bg-white rounded-2xl flex items-center justify-center text-amber-500 shadow-sm group-hover:scale-110 transition-transform duration-300">
+                <Coins className="w-6 h-6" />
+            </div>
+            <div className="text-left flex-1">
+                <h4 className="font-black text-amber-900 text-sm">Isi Ulang Koin Kredit</h4>
+                <p className="text-[10px] text-amber-700 font-bold uppercase mt-0.5">Dapatkan akses tak terbatas ke fitur AI Premium</p>
+            </div>
+            <div className="bg-white px-5 py-2.5 rounded-full text-[10px] font-black text-amber-600 shadow-sm group-hover:scale-105 transition-transform duration-300">
+                TOPUP
+            </div>
+        </button>
       </div>
 
     </div>

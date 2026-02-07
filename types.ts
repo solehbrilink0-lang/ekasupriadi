@@ -8,26 +8,37 @@ export enum Marketplace {
 }
 
 export enum CalculationMode {
-  DASHBOARD = 'dashboard', // New Mode
+  DASHBOARD = 'dashboard', 
   PRICING = 'pricing',
   ROAS = 'roas',
   ANALYSIS = 'analysis',
-  CREATOR = 'creator'
+  CREATOR = 'creator',
+  JOURNAL = 'journal',
+  TOPUP = 'topup'
+}
+
+export interface User {
+  id: string;
+  name: string;
+  email: string;
+  avatar: string;
+  credits: number;
+  isNewUser: boolean;
 }
 
 export interface PricingResult {
-  sellingPrice: number; // Harga yang dibayar pembeli
-  displayPrice: number; // Harga coret (sebelum diskon display)
+  sellingPrice: number; 
+  displayPrice: number; 
   totalFees: number;
   netProfit: number;
   breakdown: {
     admin: number;
     transaction: number;
-    program: number; // New: Gratis Ongkir Xtra + Cashback Xtra
+    program: number; 
     affiliate: number;
-    marketing: number; // Voucher + Bundle
-    operational: number; // Packing + Other
-    cogs: number; // Modal
+    marketing: number; 
+    operational: number; 
+    cogs: number; 
   };
 }
 
@@ -44,6 +55,45 @@ export interface ProductListingResult {
   seoDescription: string;
   discountStrategy: string;
   suggestedDiscountPercentage: number;
+  adsStrategy: {
+    targetRoas: number;
+    dailyBudgetRecommendation: number;
+    audienceTargeting: string;
+  };
+  generatedImages: string[]; 
+}
+
+export interface FinancialInput {
+  marketplace: Marketplace;
+  revenue: number;
+  adSpend: number; 
+}
+
+export interface FinancialReport {
+  period: string;
+  inputs: FinancialInput[];
+  grossMarginPercent: number; 
+  employeeCost: number;
+  operationalCost: number;
+  totalRevenue: number;
+  totalAdSpendRaw: number;
+  totalAdTax: number; 
+  totalAdSpendFinal: number;
+  grossProfit: number; 
+  finalNetProfit: number;
+  burnRate: number; 
+}
+
+// --- Trending Interfaces ---
+export interface TrendingProduct {
+  name: string;
+  category: string;
+  status: string; // e.g. "Viral", "Naik Daun", "Stabil"
+}
+
+export interface MarketplaceTrend {
+  platform: string;
+  items: TrendingProduct[];
 }
 
 export interface DailyInsightResult {
@@ -52,4 +102,6 @@ export interface DailyInsightResult {
   marketMood: 'FIRE' | 'SLOW' | 'NORMAL';
   trendingCategories: string[];
   actionItem: string;
+  marketplaceTrends: MarketplaceTrend[]; // New Field
+  sources?: Array<{ title: string; uri: string }>;
 }

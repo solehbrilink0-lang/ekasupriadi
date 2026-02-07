@@ -1,208 +1,273 @@
-import React, { useState, useRef } from 'react';
+
+import React, { useState, useRef, useEffect } from 'react';
 import { generateProductListing } from '../services/geminiService';
-import { Marketplace, ProductListingResult } from '../types';
-import { Camera, Sparkles, Upload, Copy, Check, Loader2, ImagePlus } from 'lucide-react';
+import { Marketplace, ProductListingResult, PricingResult } from '../types';
+import { useUser } from '../contexts/UserContext';
+import { Sparkles, Loader2, Camera, Upload, Target, DollarSign, Image as ImageIcon, CheckCircle2, Copy, ShoppingBag, Info } from 'lucide-react';
 import ReactMarkdown from 'react-markdown';
 
-const ProductCreator: React.FC = () => {
+const ProductCreator: React.FC<{ pricingResult: PricingResult | null }> = ({ pricingResult }) => {
+  const { deductCredit } = useUser();
+  
   const [productName, setProductName] = useState('');
   const [marketplace, setMarketplace] = useState<Marketplace>(Marketplace.SHOPEE);
-  const [selectedImage, setSelectedImage] = useState<string | null>(null);
-  const [base64Data, setBase64Data] = useState<string | null>(null);
-  const [mimeType, setMimeType] = useState<string>('');
+  const [sellingPrice, setSellingPrice] = useState<string>('');
+  const [profitPerItem, setProfitPerItem] = useState<string>('');
+  const [image, setImage] = useState<string | null>(null);
+  const [mimeType, setMimeType] = useState<string | null>(null);
   
   const [loading, setLoading] = useState(false);
   const [result, setResult] = useState<ProductListingResult | null>(null);
-  const [copiedField, setCopiedField] = useState<string | null>(null);
-
   const fileInputRef = useRef<HTMLInputElement>(null);
 
-  const handleImageUpload = (e: React.ChangeEvent<HTMLInputElement>) => {
+  useEffect(() => {
+    if (pricingResult) {
+      setSellingPrice(Math.ceil(pricingResult.sellingPrice).toString());
+      setProfitPerItem(Math.ceil(pricingResult.netProfit).toString());
+    }
+  }, [pricingResult]);
+
+  const handleFileChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
     if (file) {
+      setMimeType(file.type);
       const reader = new FileReader();
       reader.onloadend = () => {
-        const resultString = reader.result as string;
-        setSelectedImage(resultString);
-        // Extract base64 data and mime type
-        const matches = resultString.match(/^data:(.+);base64,(.+)$/);
-        if (matches) {
-          setMimeType(matches[1]);
-          setBase64Data(matches[2]);
-        }
+        setImage(reader.result as string);
       };
       reader.readAsDataURL(file);
     }
   };
 
   const handleGenerate = async () => {
-    if (!productName || !base64Data) {
-      alert("Mohon isi nama produk dan upload foto produk.");
+    if (!productName || !image || !sellingPrice || !profitPerItem) {
+      alert("Lengkapi Nama, Foto, Harga Jual, dan Target Profit.");
       return;
     }
 
     setLoading(true);
-    setResult(null);
+    const success = await deductCredit();
+    if (!success) {
+      alert("Koin Anda tidak cukup. Silakan isi ulang.");
+      setLoading(false);
+      return;
+    }
 
     try {
-      const data = await generateProductListing(base64Data, mimeType, productName, marketplace);
+      const base64Data = image.split(',')[1];
+      const data = await generateProductListing(
+        base64Data,
+        mimeType || 'image/jpeg',
+        productName,
+        marketplace,
+        parseInt(sellingPrice),
+        parseInt(profitPerItem)
+      );
       setResult(data);
-    } catch (error) {
-      alert("Gagal membuat konten. Silakan coba lagi.");
+    } catch (e) {
+      console.error(e);
+      alert("Gagal memproses AI. Coba lagi dalam beberapa saat.");
     } finally {
       setLoading(false);
     }
   };
 
-  const copyToClipboard = (text: string, field: string) => {
+  const copyToClipboard = (text: string) => {
     navigator.clipboard.writeText(text);
-    setCopiedField(field);
-    setTimeout(() => setCopiedField(null), 2000);
+    alert("Teks berhasil disalin!");
   };
 
   return (
-    <div className="space-y-6">
-      <div className="bg-white p-6 rounded-xl shadow-sm border border-gray-100">
-        <h2 className="text-xl font-semibold text-gray-800 flex items-center gap-2 mb-6">
-          <Sparkles className="w-5 h-5 text-indigo-600" />
-          AI Pembuat Produk Otomatis
-        </h2>
+    <div className="pt-4 pb-20 lg:pb-0 flex flex-col lg:flex-row gap-8 items-start">
+      
+      {/* INPUT FORM */}
+      <div className={`w-full ${result ? 'lg:w-2/5' : 'lg:w-full max-w-2xl mx-auto'} transition-all`}>
+        <div className="bg-white p-6 md:p-8 rounded-[2.5rem] shadow-sm border border-slate-100 space-y-6">
+          <div className="flex justify-between items-center">
+             <h2 className="text-xl font-black text-slate-800 flex items-center gap-2">
+                <Sparkles className="w-6 h-6 text-indigo-600" /> Magic Content AI
+             </h2>
+             <span className="bg-indigo-50 text-indigo-600 px-3 py-1.5 rounded-full text-[10px] font-black uppercase">1 Koin</span>
+          </div>
 
-        <div className="grid grid-cols-1 lg:grid-cols-2 gap-8">
-          {/* Input Section */}
           <div className="space-y-5">
-            <div>
-              <label className="block text-sm font-medium text-gray-700 mb-1">Upload Foto Produk</label>
-              <div 
-                onClick={() => fileInputRef.current?.click()}
-                className={`border-2 border-dashed rounded-xl h-64 flex flex-col items-center justify-center cursor-pointer transition-colors ${
-                  selectedImage ? 'border-indigo-300 bg-gray-50' : 'border-gray-300 hover:border-indigo-400 hover:bg-indigo-50'
-                }`}
-              >
-                {selectedImage ? (
-                  <img src={selectedImage} alt="Preview" className="h-full w-full object-contain rounded-lg p-2" />
-                ) : (
-                  <div className="text-center text-gray-400">
-                    <ImagePlus className="w-12 h-12 mx-auto mb-2" />
-                    <p className="text-sm">Klik untuk upload foto</p>
-                    <p className="text-xs mt-1">Format: JPG, PNG</p>
+            {/* Foto Produk */}
+            <div 
+              onClick={() => fileInputRef.current?.click()}
+              className="aspect-square w-full bg-slate-50 border-2 border-dashed border-slate-200 rounded-[2rem] flex flex-col items-center justify-center overflow-hidden cursor-pointer relative group transition-all hover:border-indigo-300 hover:bg-slate-100"
+            >
+              {image ? (
+                <>
+                  <img src={image} className="w-full h-full object-cover" alt="Preview" />
+                  <div className="absolute inset-0 bg-black/40 opacity-0 group-hover:opacity-100 flex items-center justify-center transition-opacity">
+                     <Camera className="text-white w-10 h-10" />
                   </div>
-                )}
-                <input 
-                  type="file" 
-                  ref={fileInputRef} 
-                  onChange={handleImageUpload} 
-                  accept="image/*" 
-                  className="hidden" 
-                />
-              </div>
+                </>
+              ) : (
+                <>
+                  <div className="p-5 bg-white rounded-2xl shadow-sm mb-3">
+                    <Camera className="w-8 h-8 text-indigo-500" />
+                  </div>
+                  <p className="text-[10px] font-bold text-slate-400 uppercase tracking-widest">Ambil Foto Produk</p>
+                </>
+              )}
             </div>
+            <input type="file" accept="image/*" ref={fileInputRef} onChange={handleFileChange} className="hidden" />
 
-            <div>
-              <label className="block text-sm font-medium text-gray-700 mb-1">Nama Produk (Singkat)</label>
-              <input 
+            {/* Input Nama & Marketplace */}
+            <div className="space-y-3">
+               <input 
                 type="text" 
+                placeholder="Nama Produk" 
                 value={productName}
                 onChange={(e) => setProductName(e.target.value)}
-                placeholder="Contoh: Sepatu Sneakers Pria"
-                className="w-full p-2.5 bg-gray-50 border border-gray-300 rounded-lg focus:ring-indigo-500"
-              />
+                className="w-full bg-slate-50 border-none rounded-2xl p-5 text-sm font-bold text-slate-700 focus:ring-2 focus:ring-indigo-500"
+               />
+               
+               <div className="flex gap-2 overflow-x-auto no-scrollbar py-1">
+                 {Object.values(Marketplace).map(m => (
+                    <button 
+                      key={m}
+                      onClick={() => setMarketplace(m)}
+                      className={`px-4 py-2.5 rounded-xl text-[10px] font-bold whitespace-nowrap border transition-all ${
+                        marketplace === m ? 'bg-slate-900 border-slate-900 text-white' : 'bg-white border-slate-200 text-slate-400'
+                      }`}
+                    >
+                      {m}
+                    </button>
+                 ))}
+               </div>
             </div>
 
-            <div>
-              <label className="block text-sm font-medium text-gray-700 mb-1">Target Marketplace</label>
-              <select 
-                value={marketplace} 
-                onChange={(e) => setMarketplace(e.target.value as Marketplace)}
-                className="w-full p-2.5 bg-gray-50 border border-gray-300 rounded-lg focus:ring-indigo-500"
-              >
-                {Object.values(Marketplace).map(m => (
-                  <option key={m} value={m}>{m}</option>
-                ))}
-              </select>
+            <div className="grid grid-cols-2 gap-4">
+               <div className="relative">
+                  <span className="absolute left-4 top-1/2 -translate-y-1/2 text-[9px] font-bold text-slate-400">HARGA</span>
+                  <input 
+                    type="number" 
+                    placeholder="0" 
+                    value={sellingPrice}
+                    onChange={(e) => setSellingPrice(e.target.value)}
+                    className="w-full bg-slate-50 border-none rounded-2xl pl-16 pr-4 py-4 text-sm font-bold text-slate-700"
+                  />
+               </div>
+               <div className="relative">
+                  <span className="absolute left-4 top-1/2 -translate-y-1/2 text-[9px] font-bold text-slate-400">PROFIT</span>
+                  <input 
+                    type="number" 
+                    placeholder="0" 
+                    value={profitPerItem}
+                    onChange={(e) => setProfitPerItem(e.target.value)}
+                    className="w-full bg-slate-50 border-none rounded-2xl pl-16 pr-4 py-4 text-sm font-bold text-emerald-600"
+                  />
+               </div>
             </div>
 
             <button 
               onClick={handleGenerate}
-              disabled={loading || !base64Data || !productName}
-              className="w-full py-3 px-4 bg-indigo-600 hover:bg-indigo-700 disabled:bg-gray-300 disabled:cursor-not-allowed text-white font-semibold rounded-lg shadow-md transition-colors flex items-center justify-center gap-2"
+              disabled={loading || !image}
+              className="w-full bg-indigo-600 text-white py-5 rounded-[2rem] font-black text-xs shadow-xl flex items-center justify-center gap-3 active:scale-[0.98] transition-all hover:bg-indigo-700 disabled:opacity-50"
             >
-              {loading ? (
-                <>
-                  <Loader2 className="w-5 h-5 animate-spin" />
-                  Sedang Meracik Konten...
-                </>
-              ) : (
-                <>
-                  <Sparkles className="w-5 h-5" />
-                  Buat Judul & Deskripsi SEO
-                </>
-              )}
+              {loading ? <Loader2 className="w-5 h-5 animate-spin" /> : <Sparkles className="w-5 h-5" />}
+              MAGIC GENERATE KONTEN
             </button>
-          </div>
-
-          {/* Result Section */}
-          <div className="flex flex-col h-full">
-            {result ? (
-              <div className="space-y-4 animate-fade-in">
-                {/* SEO Title */}
-                <div className="bg-white border border-gray-200 rounded-xl p-4 shadow-sm hover:border-indigo-300 transition-colors">
-                  <div className="flex justify-between items-start mb-2">
-                    <label className="text-xs font-bold text-indigo-600 uppercase tracking-wide">Judul SEO</label>
-                    <button 
-                      onClick={() => copyToClipboard(result.seoTitle, 'title')}
-                      className="text-gray-400 hover:text-indigo-600 transition-colors"
-                      title="Copy"
-                    >
-                      {copiedField === 'title' ? <Check className="w-4 h-4 text-green-500" /> : <Copy className="w-4 h-4" />}
-                    </button>
-                  </div>
-                  <p className="text-gray-800 font-medium text-lg leading-snug">{result.seoTitle}</p>
-                </div>
-
-                {/* Recommendation */}
-                <div className="bg-orange-50 border border-orange-100 rounded-xl p-4">
-                  <h3 className="text-sm font-bold text-orange-800 mb-2 flex items-center gap-2">
-                    <Sparkles className="w-4 h-4" />
-                    Strategi Cuan
-                  </h3>
-                  <p className="text-sm text-gray-700 mb-2">{result.discountStrategy}</p>
-                  <div className="flex items-center gap-2 mt-3">
-                    <span className="text-xs text-gray-500">Saran Diskon:</span>
-                    <span className="bg-white px-2 py-1 rounded border border-orange-200 text-orange-600 font-bold text-sm">
-                      {result.suggestedDiscountPercentage}%
-                    </span>
-                  </div>
-                </div>
-
-                {/* Description */}
-                <div className="bg-white border border-gray-200 rounded-xl p-4 shadow-sm hover:border-indigo-300 transition-colors flex-1">
-                   <div className="flex justify-between items-start mb-2">
-                    <label className="text-xs font-bold text-indigo-600 uppercase tracking-wide">Deskripsi Produk</label>
-                    <button 
-                      onClick={() => copyToClipboard(result.seoDescription, 'desc')}
-                      className="text-gray-400 hover:text-indigo-600 transition-colors"
-                      title="Copy"
-                    >
-                      {copiedField === 'desc' ? <Check className="w-4 h-4 text-green-500" /> : <Copy className="w-4 h-4" />}
-                    </button>
-                  </div>
-                  <div className="prose prose-sm prose-gray max-w-none h-64 overflow-y-auto custom-scrollbar">
-                    <ReactMarkdown>{result.seoDescription}</ReactMarkdown>
-                  </div>
-                </div>
-              </div>
-            ) : (
-              <div className="flex flex-col items-center justify-center h-full text-gray-400 p-8 border-2 border-dashed border-gray-200 rounded-xl bg-gray-50/50">
-                <Camera className="w-16 h-16 mb-4 opacity-20" />
-                <p className="text-center max-w-xs">
-                  Upload foto produk Anda, AI kami akan menganalisa gambar dan membuatkan konten jualan yang menarik.
-                </p>
-              </div>
-            )}
           </div>
         </div>
       </div>
+
+      {/* RESULTS SECTION */}
+      {result && (
+        <div className="w-full lg:w-3/5 space-y-8 animate-fade-up">
+           {/* Section 1: Generated Images */}
+           <div className="space-y-4">
+              <h3 className="text-xs font-black text-slate-800 uppercase tracking-widest px-2 flex items-center gap-2">
+                 <ImageIcon className="w-4 h-4 text-indigo-600" /> 5 Rekomendasi Foto AI
+              </h3>
+              <div className="flex gap-4 overflow-x-auto no-scrollbar pb-4 snap-x">
+                 {result.generatedImages.map((img, i) => (
+                    <div key={i} className="w-72 h-72 bg-white rounded-[2.5rem] shadow-sm border border-slate-100 overflow-hidden shrink-0 relative group snap-center">
+                       <img src={img} className="w-full h-full object-cover" alt={`variant-${i}`} />
+                       <div className="absolute top-4 left-4 bg-black/50 backdrop-blur-sm text-white text-[8px] px-3 py-1.5 rounded-full uppercase font-black">
+                         Varian {i+1}
+                       </div>
+                       <a href={img} download={`foto-produk-${i}.png`} className="absolute bottom-4 right-4 bg-white text-indigo-600 p-2 rounded-xl opacity-0 group-hover:opacity-100 transition-opacity shadow-lg">
+                          <CheckCircle2 className="w-5 h-5" />
+                       </a>
+                    </div>
+                 ))}
+              </div>
+           </div>
+
+           <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+                {/* Section 2: ROAS & Budget Iklan */}
+                <div className="bg-white p-6 rounded-[2.5rem] border border-slate-100 shadow-sm h-full">
+                    <div className="flex items-center gap-3 mb-4">
+                         <div className="w-10 h-10 bg-rose-50 rounded-xl flex items-center justify-center">
+                             <Target className="w-5 h-5 text-rose-500" />
+                         </div>
+                         <div>
+                             <p className="text-[10px] font-black text-slate-400 uppercase leading-none">Target ROAS</p>
+                             <p className="text-[9px] text-slate-400 mt-0.5 font-bold">Minimum safe limit</p>
+                         </div>
+                    </div>
+                    <h4 className="text-4xl font-black text-slate-800 mb-2">{result.adsStrategy.targetRoas}x</h4>
+                </div>
+
+                <div className="bg-indigo-600 p-6 rounded-[2.5rem] text-white shadow-lg h-full">
+                     <div className="flex items-center gap-3 mb-4">
+                        <div className="w-10 h-10 bg-white/20 rounded-xl flex items-center justify-center">
+                            <DollarSign className="w-5 h-5 text-white" />
+                        </div>
+                        <div>
+                            <p className="text-[10px] font-black text-white/60 uppercase leading-none">Budget Harian</p>
+                            <p className="text-[9px] text-indigo-200 mt-0.5 font-bold">Testing awal 7 hari</p>
+                        </div>
+                     </div>
+                     <h4 className="text-3xl font-black">Rp {result.adsStrategy.dailyBudgetRecommendation.toLocaleString('id-ID')}</h4>
+                </div>
+           </div>
+
+           {/* Section 3: Targeting & Strategy */}
+           <div className="bg-white p-8 rounded-[2.5rem] shadow-sm border border-slate-100">
+              <h3 className="text-xs font-black text-slate-800 uppercase tracking-widest mb-6 flex items-center gap-2">
+                <Info className="w-4 h-4 text-indigo-600" /> Strategi Market-Fit
+              </h3>
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+                 <div className="p-6 bg-slate-50 rounded-[2rem]">
+                    <p className="text-[10px] font-black text-slate-400 uppercase mb-2">Target Audiens</p>
+                    <p className="text-sm font-bold text-slate-700 leading-relaxed">{result.adsStrategy.audienceTargeting}</p>
+                 </div>
+                 <div className="p-6 bg-slate-50 rounded-[2rem]">
+                    <p className="text-[10px] font-black text-slate-400 uppercase mb-2">Strategi Diskon</p>
+                    <p className="text-sm font-bold text-indigo-600">{result.discountStrategy}</p>
+                    <p className="text-xs font-medium text-slate-500 mt-1">Saran Potongan: {result.suggestedDiscountPercentage}%</p>
+                 </div>
+              </div>
+           </div>
+
+           {/* Section 4: SEO Copywriting */}
+           <div className="bg-white p-8 rounded-[2.5rem] shadow-sm border border-slate-100 space-y-6">
+              <div className="flex justify-between items-center">
+                 <h3 className="text-xs font-black text-slate-800 uppercase tracking-widest">SEO Optimized Copy</h3>
+                 <button onClick={() => setResult(null)} className="text-[10px] font-bold text-indigo-600 bg-indigo-50 px-4 py-2 rounded-full uppercase hover:bg-indigo-100 transition-colors">Buat Baru</button>
+              </div>
+              
+              <div className="space-y-6">
+                 <div className="bg-slate-50 p-6 rounded-[2rem] relative group border border-slate-100">
+                    <p className="text-[10px] font-black text-slate-400 uppercase mb-3">Judul Produk</p>
+                    <p className="text-sm md:text-base font-bold text-slate-800 pr-10 leading-snug">{result.seoTitle}</p>
+                    <button onClick={() => copyToClipboard(result.seoTitle)} className="absolute top-6 right-6 p-2 bg-white rounded-lg shadow-sm text-slate-400 hover:text-indigo-600 transition-colors"><Copy className="w-4 h-4"/></button>
+                 </div>
+                 
+                 <div className="bg-slate-50 p-6 rounded-[2rem] border border-slate-100">
+                    <p className="text-[10px] font-black text-slate-400 uppercase mb-3">Deskripsi & Keyword</p>
+                    <div className="prose prose-sm prose-indigo max-w-none text-xs md:text-sm leading-relaxed text-slate-600">
+                       <ReactMarkdown>{result.seoDescription}</ReactMarkdown>
+                    </div>
+                 </div>
+              </div>
+           </div>
+        </div>
+      )}
     </div>
   );
 };
