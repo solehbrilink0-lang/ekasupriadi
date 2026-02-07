@@ -58,7 +58,7 @@ export const UserProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
     try {
       await signInWithPopup(auth, googleProvider);
     } catch (error) {
-      console.error("Login Failed", error);
+      // Re-throw agar bisa ditangkap oleh LoginScreen untuk handling spesifik (seperti unauthorized domain)
       throw error;
     }
   };
@@ -85,10 +85,13 @@ export const UserProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
 
   const logout = async () => {
     try {
-      await signOut(auth);
+      if (auth.currentUser) {
+          await signOut(auth);
+      }
       setUser(null);
     } catch (error) {
       console.error("Logout Failed", error);
+      setUser(null);
     }
   };
 

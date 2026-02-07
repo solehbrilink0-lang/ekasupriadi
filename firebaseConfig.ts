@@ -4,8 +4,9 @@ import { getFirestore } from "firebase/firestore";
 import { getFunctions } from "firebase/functions";
 import { getAnalytics, isSupported } from "firebase/analytics";
 
+// Konfigurasi sesuai dengan snippet dari Firebase Console Anda
 export const firebaseConfig = {
-  apiKey: "AIzaSyBc1nHfDUtw6yprHQQ-B0FkBPPgNnUtIIk", 
+  apiKey: "AIzaSyBc1nHfDUtw6yprHQQ-B0FkBPPgNnUtIIk",
   authDomain: "sellerpintar-f6927.firebaseapp.com",
   projectId: "sellerpintar-f6927",
   storageBucket: "sellerpintar-f6927.firebasestorage.app",
@@ -14,19 +15,17 @@ export const firebaseConfig = {
   measurementId: "G-YB6PYWPF74"
 };
 
-// Singleton Pattern: Mencegah multiple initialization
-// Jika app sudah ada, gunakan yang sudah ada. Jika belum, buat baru.
+// Singleton Pattern: Mencegah multiple initialization error
 const app = !getApps().length ? initializeApp(firebaseConfig) : getApp();
 
+// Export service yang digunakan di seluruh aplikasi
 export const auth = getAuth(app);
 export const db = getFirestore(app);
-// Region us-central1 adalah default
-export const functions = getFunctions(app, 'us-central1'); 
+export const functions = getFunctions(app, 'us-central1');
 export const googleProvider = new GoogleAuthProvider();
 
-// Initialize Analytics (Safe check)
+// Initialize Analytics (Browser only)
 let analytics;
-// Cek environment browser dan support analytics
 if (typeof window !== 'undefined') {
   isSupported().then((supported) => {
     if (supported) {

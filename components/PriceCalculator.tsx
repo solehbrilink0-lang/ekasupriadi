@@ -3,7 +3,7 @@ import React, { useState, useCallback, useMemo, useEffect } from 'react';
 import { Marketplace, PricingResult } from '../types';
 import { 
   DollarSign, Loader2, AlertCircle, Percent, ChevronDown, 
-  ChevronUp, Package, Truck, Tag, ReceiptText, ShieldAlert, ArrowRight, MousePointerClick, Crown, Store, Medal, Users
+  ChevronUp, Package, Truck, Tag, ReceiptText, ShieldAlert, ArrowRight, MousePointerClick, Crown, Store, Medal, Users, AlertTriangle, CheckCircle2
 } from 'lucide-react';
 
 // --- DATA STRUCTURES ---
@@ -83,6 +83,7 @@ const PriceCalculator: React.FC<{ onCalculate?: (result: PricingResult) => void 
   const [packingCost, setPackingCost] = useState(''); 
   const [opCost, setOpCost] = useState(''); 
   const [desiredProfit, setDesiredProfit] = useState(''); 
+  const [returnRate, setReturnRate] = useState('2.0'); // Default 2% return risk
   
   // Marketing Costs (Nominal / Percent)
   const [voucherSeller, setVoucherSeller] = useState(''); 
@@ -119,11 +120,16 @@ const PriceCalculator: React.FC<{ onCalculate?: (result: PricingResult) => void 
     const valPacking = parseFloat(packingCost) || 0;
     const valOp = parseFloat(opCost) || 0;
     const valProfit = parseFloat(desiredProfit) || 0;
+    const valReturnRate = parseFloat(returnRate) || 0;
     
     const valVoucherInput = parseFloat(voucherSeller) || 0;
     const valBundleInput = parseFloat(bundleDiscount) || 0;
     const valAffiliatePct = parseFloat(affiliatePercent) || 0;
     
+    // Kalkulasi Biaya Resiko Retur (Dari HPP + Packing)
+    // Ini adalah 'cadangan' jika barang hilang/rusak saat retur.
+    const riskCost = (valCogs + valPacking) * (valReturnRate / 100);
+
     let marketingNominal = 0;
     let marketingPercent = 0;
 
@@ -133,7 +139,8 @@ const PriceCalculator: React.FC<{ onCalculate?: (result: PricingResult) => void 
     if (bundleType === 'NOMINAL') marketingNominal += valBundleInput;
     else marketingPercent += valBundleInput;
 
-    const numerator = valCogs + valPacking + valOp + valProfit + marketingNominal;
+    // Tambahkan Risk Cost ke numerator agar harga jual meng-cover resiko ini
+    const numerator = valCogs + valPacking + valOp + valProfit + marketingNominal + riskCost;
     let totalPctFees = currentTier.rate + config.transaction;
     if (useGox) totalPctFees += config.gox;
     if (useCbx) totalPctFees += config.cbx;
@@ -165,7 +172,8 @@ const PriceCalculator: React.FC<{ onCalculate?: (result: PricingResult) => void 
         affiliate: realAffiliateCost,
         marketing: realMarketingCost,
         operational: valPacking + valOp,
-        cogs: valCogs
+        cogs: valCogs,
+        risk: riskCost
       }
     };
 
@@ -175,7 +183,7 @@ const PriceCalculator: React.FC<{ onCalculate?: (result: PricingResult) => void 
       if (onCalculate) onCalculate(finalResult);
       setLoading(false);
     }, 500);
-  }, [cogs, packingCost, opCost, desiredProfit, voucherSeller, voucherType, bundleDiscount, bundleType, affiliatePercent, marketplace, useGox, useCbx, strikePriceRatio, config, currentTier, onCalculate]);
+  }, [cogs, packingCost, opCost, desiredProfit, returnRate, voucherSeller, voucherType, bundleDiscount, bundleType, affiliatePercent, marketplace, useGox, useCbx, strikePriceRatio, config, currentTier, onCalculate]);
 
   const TypeToggle = ({ type, setType }: { type: 'NOMINAL' | 'PERCENT', setType: (t: 'NOMINAL' | 'PERCENT') => void }) => (
     <div className="flex bg-slate-100 p-1 rounded-xl shrink-0 border border-slate-200">
@@ -193,6 +201,13 @@ const PriceCalculator: React.FC<{ onCalculate?: (result: PricingResult) => void 
        </button>
     </div>
   );
+
+  const getMarginHealth = (netProfit: number, sellingPrice: number) => {
+    const margin = (netProfit / sellingPrice) * 100;
+    if (margin < 10) return { status: 'DANGER', label: 'PROFIT KRITIS', color: 'text-rose-600 bg-rose-50 border-rose-200', icon: AlertTriangle };
+    if (margin < 20) return { status: 'WARNING', label: 'PROFIT WAJAR', color: 'text-amber-600 bg-amber-50 border-amber-200', icon: AlertCircle };
+    return { status: 'GOOD', label: 'PROFIT SEHAT', color: 'text-emerald-600 bg-emerald-50 border-emerald-200', icon: CheckCircle2 };
+  };
 
   return (
     <div className="pt-4 pb-20 lg:pb-0 flex flex-col lg:flex-row gap-8 items-start">
@@ -286,6 +301,22 @@ const PriceCalculator: React.FC<{ onCalculate?: (result: PricingResult) => void 
                         />
                     </div>
                 </div>
+
+                {/* Return Risk Input */}
+                <div className="relative group bg-orange-50/50 p-1 rounded-2xl border border-orange-100">
+                     <span className="absolute left-4 top-1/2 -translate-y-1/2 text-[9px] font-black text-orange-400 uppercase transition-colors">Resiko Retur</span>
+                     <input 
+                       inputMode="numeric"
+                       placeholder="0"
+                       value={returnRate}
+                       onChange={(e) => setReturnRate(e.target.value)}
+                       className="w-full bg-transparent border-none pl-28 pr-10 py-3 text-sm font-black text-orange-600 outline-none"
+                     />
+                     <span className="absolute right-4 top-1/2 -translate-y-1/2 text-[10px] font-bold text-orange-400">%</span>
+                </div>
+                <p className="text-[9px] text-slate-400 px-2 leading-tight">
+                  Disarankan 1.5% - 3% untuk mengantisipasi kerugian barang hilang/rusak atau retur COD.
+                </p>
             </div>
             </div>
 
@@ -306,7 +337,7 @@ const PriceCalculator: React.FC<{ onCalculate?: (result: PricingResult) => void 
                 </div>
                 <div className="bg-emerald-50 p-4 rounded-2xl border border-emerald-100">
                      <p className="text-[10px] text-emerald-800 leading-relaxed font-bold">
-                        Tip: Masukkan nominal bersih yang ingin Anda kantongi per pcs setelah semua biaya.
+                        Tip: Masukkan nominal bersih. Aplikasi akan menghitung harga jual agar target ini tercapai + menutup biaya resiko retur.
                      </p>
                 </div>
             </div>
@@ -481,6 +512,25 @@ const PriceCalculator: React.FC<{ onCalculate?: (result: PricingResult) => void 
                         </div>
                     </div>
 
+                    {/* Margin Health Indicator */}
+                    {(() => {
+                        const health = getMarginHealth(result.netProfit, result.sellingPrice);
+                        const HealthIcon = health.icon;
+                        const margin = ((result.netProfit / result.sellingPrice) * 100).toFixed(1);
+                        return (
+                            <div className={`mb-6 p-4 rounded-2xl flex items-center justify-between ${health.color}`}>
+                                <div className="flex items-center gap-3">
+                                    <HealthIcon className="w-5 h-5" />
+                                    <div>
+                                        <p className="text-[10px] font-black uppercase">{health.label}</p>
+                                        <p className="text-xs font-bold">Margin Profit {margin}%</p>
+                                    </div>
+                                </div>
+                                {health.status === 'DANGER' && <span className="text-[9px] font-bold bg-white/20 px-2 py-1 rounded">Resiko Rugi</span>}
+                            </div>
+                        );
+                    })()}
+
                     <div className="mt-4 space-y-3 border-t border-white/10 pt-6">
                         <h4 className="text-[10px] font-black uppercase tracking-widest opacity-40 mb-2">Rincian Biaya</h4>
                         <div className="flex justify-between text-xs font-bold hover:bg-white/5 p-1 rounded-lg transition-colors">
@@ -512,6 +562,10 @@ const PriceCalculator: React.FC<{ onCalculate?: (result: PricingResult) => void 
                         <div className="flex justify-between text-xs font-bold hover:bg-white/5 p-1 rounded-lg transition-colors">
                             <span className="opacity-60">Packing & Operasional</span>
                             <span>Rp {result.breakdown.operational.toLocaleString('id-ID')}</span>
+                        </div>
+                        <div className="flex justify-between text-xs font-bold text-orange-300 hover:bg-white/5 p-1 rounded-lg transition-colors">
+                            <span className="opacity-80">Cadangan Resiko ({returnRate}%)</span>
+                            <span>Rp {Math.ceil(result.breakdown.risk).toLocaleString('id-ID')}</span>
                         </div>
                         <div className="flex justify-between text-xs font-bold text-rose-300 hover:bg-white/5 p-1 rounded-lg transition-colors">
                             <span className="opacity-80">Beban Diskon Toko</span>

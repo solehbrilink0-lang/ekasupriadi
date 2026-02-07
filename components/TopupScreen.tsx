@@ -1,4 +1,3 @@
-
 import React, { useState } from 'react';
 import { useUser } from '../contexts/UserContext';
 import { functions } from '../firebaseConfig';
@@ -47,12 +46,25 @@ const TopupScreen: React.FC = () => {
         return;
     }
 
+    // 2. Handling Khusus Mode Tamu / Demo
+    if (user.id === 'guest_user') {
+        const confirmSimulasi = confirm("Mode Tamu Aktif: Sistem pembayaran asli dinonaktifkan. Apakah Anda ingin mensimulasikan Topup Sukses?");
+        if (confirmSimulasi) {
+            setProcessing(pkg.id);
+            // Simulasi delay network
+            setTimeout(() => {
+                addCredits(pkg.credits);
+                alert(`[DEMO] Pembayaran Berhasil! ${pkg.credits} Koin ditambahkan ke akun Tamu.`);
+                setProcessing(null);
+            }, 1500);
+        }
+        return;
+    }
+
     setProcessing(pkg.id);
 
     try {
-        // 2. Panggil Cloud Function 'createTransaction'
-        // NOTE: Karena Anda belum bisa deploy backend, ini mungkin akan error di console.
-        // Jika error, kode catch di bawah akan menangkapnya.
+        // 3. Panggil Cloud Function 'createTransaction' (Hanya untuk User Asli)
         const createTransactionFn = httpsCallable(functions, 'createTransaction');
         
         const response = await createTransactionFn({
@@ -70,7 +82,7 @@ const TopupScreen: React.FC = () => {
             return;
         }
 
-        // 3. Munculkan Pop-up Pembayaran (Snap)
+        // 4. Munculkan Pop-up Pembayaran (Snap)
         if (window.snap) {
             window.snap.pay(data.token, {
                 onSuccess: (result: any) => {
@@ -102,9 +114,8 @@ const TopupScreen: React.FC = () => {
     } catch (error: any) {
         console.error("Topup Error:", error);
         
-        // --- SIMULASI MODE (FALLBACK) ---
-        // Karena backend belum dideploy, kita buat simulasi agar Anda bisa melihat UI-nya bekerja.
-        const confirmSimulasi = confirm("Koneksi ke backend gagal (karena belum dideploy). Apakah Anda ingin mensimulasikan Topup Sukses untuk tes UI?");
+        // --- SIMULASI MODE (FALLBACK JIKA BACKEND ERROR) ---
+        const confirmSimulasi = confirm("Koneksi ke backend gagal (Mungkin belum dideploy). Simulasikan Topup Sukses untuk tes UI?");
         if (confirmSimulasi) {
              addCredits(pkg.credits);
              alert(`[MODE TES] ${pkg.credits} Koin ditambahkan ke akun.`);
@@ -128,6 +139,11 @@ const TopupScreen: React.FC = () => {
             <div className="flex items-center justify-center gap-2 text-slate-400 text-xs bg-white/5 w-fit mx-auto px-4 py-2 rounded-full backdrop-blur-md border border-white/10">
                 <ShieldCheck className="w-4 h-4 text-emerald-400" /> Payment Secured by Midtrans
             </div>
+            {user?.id === 'guest_user' && (
+                <div className="mt-4 bg-amber-500/20 text-amber-200 text-[10px] font-bold px-3 py-1 rounded-full inline-block">
+                    MODE TAMU (DEMO)
+                </div>
+            )}
         </div>
       </div>
 

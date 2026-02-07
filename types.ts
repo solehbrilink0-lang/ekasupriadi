@@ -52,7 +52,8 @@ export interface PricingResult {
     affiliate: number;
     marketing: number; 
     operational: number; 
-    cogs: number; 
+    cogs: number;
+    risk: number; // Added: Cost of Returns/Lost items
   };
 }
 
